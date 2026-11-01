@@ -59,7 +59,8 @@ jobs:
           xcodebuild -project Jambul.xcodeproj -scheme Jambul -configuration Release \
             -destination "generic/platform=macOS" -derivedDataPath build/DerivedData build
 
-      # Ad-hoc signed and not notarized until Jambul has an Apple Developer ID; the README explains how to open it.
+      # Ad-hoc signed and not notarized until Jambul has an Apple Developer ID; the README and the release notes explain
+      # how to open it.
       - name: Package
         run: |
           app=build/DerivedData/Build/Products/Release/Jambul.app
@@ -74,7 +75,26 @@ jobs:
           shasum -a 256 "Jambul-$VERSION.zip" > "Jambul-$VERSION.zip.sha256"
           awk -v heading="## [$VERSION]" 'index($0, heading) == 1 { on = 1; next } on && /^## \[/ { exit } on' \
             CHANGELOG.md > notes.md
-          test -s notes.md
+          # An empty section would otherwise publish notes that hold nothing but the install note below.
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md's section for $VERSION is empty"
+            exit 1
+          fi
+          # Many people download straight from the release page without reading the README, so the notes end with the
+          # extra first-launch step. The minimum macOS is read from the built app, so it follows project.yml's
+          # deployment target.
+          minimum=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$app/Contents/Info.plist")
+          {
+            echo
+            echo "---"
+            echo
+            echo "**Install:** download \`Jambul-$VERSION.zip\`, unzip it and move \`Jambul.app\` to Applications" \
+              "(macOS ${minimum%.0} or later). Jambul isn't notarized by Apple yet, so macOS refuses to open it" \
+              "the first time: go to System Settings → Privacy & Security, find the message about Jambul, and" \
+              "choose **Open Anyway**. Once open, Jambul lives in the notch and in the menu bar (the bird icon)," \
+              "not in the Dock. More in the README's" \
+              "[Install]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#install) section."
+          } >> notes.md
 
       - name: Publish
         env:
