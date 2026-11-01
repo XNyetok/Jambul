@@ -22,6 +22,7 @@ Where Jambul is and where it's heading. Plans change as we learn; open an issue 
 - **Keep Awake:** keeps the display on until it's turned off, for long downloads, builds or agents, with an eye and a typing laptop beside the notch. It turns itself off at 20% battery.
 - **Several activities at once:** the two most important share the compact island.
 - **Tabs:** the open island shows one feature per tab, with one color per feature.
+- **Usage limits:** Claude, Antigravity and Codex limits in a tab with each service's logo, peeks at 80% and 95%, and the island beside the notch from 95% until a limit resets. Jambul itself still makes no network connections: it reads Claude Code's status line, Antigravity's own usage report and Codex's session logs.
 - **Open source:** a public repository with documentation and contribution guides. Every pull request is built, unit-tested and scanned for secrets, personal data and AI attribution. A workflow builds each release and publishes it on GitHub, starting with 0.1.0.
 
 ## Next

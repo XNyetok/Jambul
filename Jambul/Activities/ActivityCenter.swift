@@ -42,6 +42,13 @@ final class ActivityCenter {
         onPeek?(peek)
     }
 
+    /// Called by the island as it starts showing a peek, for an activity that only counts news as told once seen.
+    @ObservationIgnored var onPeekShown: (@MainActor (Peek) -> Void)?
+
+    func peekWasShown(_ peek: Peek) {
+        onPeekShown?(peek)
+    }
+
     private func trackLiveActivities() {
         withObservationTracking {
             _ = liveActivities.map(\.id)

@@ -25,12 +25,16 @@ protocol IslandActivity: AnyObject, Observable {
     var tint: Color { get }
     /// The symbol on its tab.
     var tabSymbol: String { get }
+    /// Whether coming live means the owner started it, which makes its tab the one the island opens on later. One that
+    /// comes live on its own, like the usage limits nearing their end, doesn't.
+    var countsAsStarted: Bool { get }
 
     @ViewBuilder var compactLeading: CompactLeading { get }
     @ViewBuilder var compactTrailing: CompactTrailing { get }
     /// A single glyph on the left of the notch, for when a more important activity takes the right.
     var compactMinimal: AnyView { get }
-    /// Its tab in the open island: one row, as tall as the timer's ring, with its glyph on the left, what it is in the
+    /// Its tab in the open island, in the room below the notch: mostly one row, as tall as the timer's ring, with its
+    /// glyph on the left, what it is in the
     /// middle and its buttons on the right.
     @ViewBuilder var tab: Tab { get }
 }
@@ -41,6 +45,7 @@ extension IslandActivity {
     var compactSlotWidth: CGFloat { 36 }
     var tint: Color { .white }
     var tabSymbol: String { "circle.fill" }
+    var countsAsStarted: Bool { true }
     var compactMinimal: AnyView { AnyView(compactLeading) }
 
     /// Whether the activity has a tab in the open island.

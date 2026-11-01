@@ -342,6 +342,7 @@ final class IslandModel {
         collapseTask?.cancel()
         peekTask?.cancel()
         present(.peek) { self.peek = peek }
+        defer { center.peekWasShown(peek) }
         // A pointer the peek grew under didn't come for it, and only reports arriving once it moves. Any other pointer
         // has gone, even if a close it started was just cancelled, so hover counts for it.
         peekKeepsItsTime = !pointerRegions.isEmpty || isPointerOnIsland()
@@ -424,7 +425,9 @@ final class IslandModel {
         // A start is an activity joining the live ones. Keep Awake turned back on from the menu bar within its 0.3 s of
         // closing never leaves them, so it goes unrecorded; the tab's own Turn On only appears after it has left.
         let wasLive = Set(liveActivities.map(\.id))
-        if let started = live.first(where: { $0.hasTab && !wasLive.contains($0.id) }) { lastStartedTab = started.id }
+        if let started = live.first(where: { $0.hasTab && $0.countsAsStarted && !wasLive.contains($0.id) }) {
+            lastStartedTab = started.id
+        }
         let next: IslandPresentation = isResting ? (live.isEmpty ? .idle : .compact) : presentation
         if next == .expanded { pressesAimAtOldContent = true }
         // A pointer resting on the lifted island or a peek keeps the old activity's room, so the island doesn't narrow

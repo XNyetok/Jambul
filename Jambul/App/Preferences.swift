@@ -43,6 +43,17 @@ final class Preferences {
 
     static let defaultTimerSound = "Glass"
 
+    /// The subscriptions whose usage limits the island shows.
+    var usageProviders: Set<UsageProvider> {
+        didSet { save(usageProviders.map(\.rawValue).sorted(), for: .usageProviders) }
+    }
+
+    /// Whether the owner agreed to connect Claude Code's status line, which changes Claude Code's settings. Claude's
+    /// limits only reach Jambul through it.
+    var claudeStatusLineAgreed: Bool {
+        didSet { save(claudeStatusLineAgreed, for: .claudeStatusLineAgreed) }
+    }
+
     /// Called after any setting changes.
     @ObservationIgnored var onChange: (@MainActor () -> Void)?
 
@@ -59,10 +70,14 @@ final class Preferences {
         case let name? where Feedback.systemSounds[name] != nil: name
         default: Self.defaultTimerSound
         }
+        usageProviders = (defaults.stringArray(forKey: Key.usageProviders.rawValue))
+            .map { Set($0.compactMap(UsageProvider.init(rawValue:))) }
+            ?? Set(UsageProvider.allCases.filter(\.isOnByDefault))
+        claudeStatusLineAgreed = defaults.bool(forKey: Key.claudeStatusLineAgreed.rawValue)
     }
 
     private enum Key: String {
-        case hoverSpeed, hapticTaps, hidesInFullScreen, timerSound
+        case hoverSpeed, hapticTaps, hidesInFullScreen, timerSound, usageProviders, claudeStatusLineAgreed
     }
 
     private func save(_ value: Any, for key: Key) {

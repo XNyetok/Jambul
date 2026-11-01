@@ -45,21 +45,145 @@ struct PeekContent: View {
     let peek: Peek
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: peek.symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(peek.tint)
-            Text(peek.title)
-                .font(.system(size: 13, weight: .semibold))
-            Spacer(minLength: 8)
-            if let detail = peek.detail {
-                Text(detail)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
+        VStack(spacing: 6) {
+            HStack(spacing: 10) {
+                PeekIcon(peek: peek)
+                title
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 8)
+                if let detail = peek.detail {
+                    Text(detail)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let progress = peek.progress {
+                PeekProgress(fraction: progress, tint: peek.tint, drains: peek.motion == .bounce)
             }
         }
         .lineLimit(1)
         .foregroundStyle(.white)
+    }
+
+    /// The title, with its emphasis in the peek's color.
+    private var title: Text {
+        guard let emphasis = peek.emphasis, let range = peek.title.range(of: emphasis) else { return Text(peek.title) }
+        return Text(peek.title[..<range.lowerBound]) + Text(emphasis).foregroundStyle(peek.tint)
+            + Text(peek.title[range.upperBound...])
+    }
+}
+
+/// A peek's symbol or logo, moving once as the peek comes out.
+private struct PeekIcon: View {
+    let peek: Peek
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var arrived = false
+    @State private var beat = 0
+
+    var body: some View {
+        icon
+            // Only a logo is sized; a symbol keeps its own size, so the other peeks don't move.
+            .frame(width: peek.logo == nil ? nil : 18, height: peek.logo == nil ? nil : 18)
+            .rotationEffect(.degrees(rotation))
+            .scaleEffect(scale)
+            .opacity(peek.motion == .sleep && arrived ? Motion.Usage.asleepOpacity : 1)
+            .phaseAnimator(phases, trigger: beat) { content, phase in
+                content
+                    .scaleEffect(peek.motion == .pulse ? phase : 1)
+                    .offset(y: peek.motion == .bounce ? phase : 0)
+            } animation: { _ in Motion.Usage.beat }
+            .background {
+                if peek.motion == .bounce, !reduceMotion { PeekSparks(color: peek.tint) }
+            }
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(peek.motion == .sleep ? Motion.Usage.fallAsleep : Motion.Usage.turn) { arrived = true }
+                beat += 1
+            }
+    }
+
+    @ViewBuilder private var icon: some View {
+        if let logo = peek.logo {
+            Image(logo)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+        } else {
+            Image(systemName: peek.symbol)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(peek.tint)
+        }
+    }
+
+    private var rotation: Double {
+        switch peek.motion {
+        case .spin: arrived || reduceMotion ? 0 : Motion.Usage.turnFrom
+        case .sleep: arrived ? Motion.Usage.asleepTilt : 0
+        default: 0
+        }
+    }
+
+    private var scale: Double {
+        switch peek.motion {
+        case .spin: arrived || reduceMotion ? 1 : Motion.Usage.turnScale
+        case .sleep: arrived ? Motion.Usage.asleepScale : 1
+        default: 1
+        }
+    }
+
+    private var phases: [Double] {
+        guard !reduceMotion else { return [peek.motion == .bounce ? 0 : 1] }
+        switch peek.motion {
+        case .pulse: return Motion.Usage.pulseScales
+        case .bounce: return Motion.Usage.bounceOffsets
+        default: return [1]
+        }
+    }
+}
+
+/// Sparks flying out from a logo that has just come back.
+private struct PeekSparks: View {
+    let color: Color
+    @State private var flown = false
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<6, id: \.self) { index in
+                Circle()
+                    .fill(color)
+                    .frame(width: 3, height: 3)
+                    .offset(y: flown ? -Motion.Usage.sparkReach : 0)
+                    .rotationEffect(.degrees(Double(index) * 60))
+                    .opacity(flown ? 0 : 1)
+            }
+        }
+        .onAppear {
+            withAnimation(Motion.Usage.sparks) { flown = true }
+        }
+    }
+}
+
+/// The thin bar under a peek's message, filling to `fraction`, or draining to it from full.
+private struct PeekProgress: View {
+    let fraction: Double
+    let tint: Color
+    let drains: Bool
+    @State private var shown = false
+
+    var body: some View {
+        GeometryReader { proxy in
+            Capsule()
+                .fill(.white.opacity(0.12))
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: proxy.size.width * max(shown ? fraction : (drains ? 1 : 0), 0.02))
+                }
+        }
+        .frame(height: 2)
+        .onAppear {
+            withAnimation(drains ? Motion.Usage.drain : Motion.Usage.fill) { shown = true }
+        }
     }
 }
 

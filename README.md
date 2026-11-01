@@ -10,9 +10,10 @@ Jambul turns the notch into a living island. Hover over it to open it, move away
 - **Timer:** start 5, 15 or 25 minutes from the island. A ring and the time left rest beside the notch; open the island to add a minute, pause or stop. When it ends you get a peek, a sound and a tap on the trackpad. If the Mac was asleep, the timer ends once it fully wakes; if the screen was locked, the peek waits until you unlock it.
 - **Keep Awake:** keeps the display on until you turn it off, for long downloads, builds or coding agents. A blinking eye and a typing laptop show it's on. It turns itself off at 20% battery.
 - **Battery:** peeks when the charger is plugged in or out and when the battery is full, plus low-battery warnings at 20% and 5% that wait until you can see them.
+- **Usage limits:** how much of your Claude, Antigravity and Codex limits you've used and when they start over, each with its own logo. Peeks warn at 80% and 95%, the island stays beside the notch from 95% until the limit resets, and a peek tells you when it's back. Each subscription can be turned on or off in Settings; Codex starts off.
 - **Tabs:** the open island shows one feature at a time, and opens on whatever is running or what you started last.
 - **Full screen friendly:** the island never covers a full-screen app, and shows the day and time while the menu bar is hidden. It can also hide completely in full screen.
-- **Settings:** open at login, hover speed, haptic taps, and the timer's sound. Reduce Motion is respected.
+- **Settings:** open at login, hover speed, haptic taps, the timer's sound, and which usage limits to show. Reduce Motion is respected.
 
 ## Requirements
 - macOS 14 Sonoma or later.
@@ -39,8 +40,15 @@ cd Jambul
 ## Privacy
 Jambul makes no network connections and collects no data. Its settings stay in its preferences on your Mac. To tell full-screen spaces apart it reads SkyLight, a private macOS framework, at runtime; if that ever stops working, Jambul treats every space as a regular desktop instead of failing.
 
+For usage limits, Jambul only reads what the tools on your Mac already know:
+- **Claude:** once you agree in Settings, Jambul adds itself to Claude Code's status line in `~/.claude/settings.json`, keeping a copy of the original. Your status line looks the same; it also hands its input to Jambul over a socket only your account can open. Turning Claude off puts your status line back exactly.
+- **Antigravity:** Jambul runs `agy -p /usage --output-format json`, Antigravity's own usage report, which sends no prompt to a model. agy asks Google for the numbers itself.
+- **Codex:** Jambul reads the limits Codex writes into its session logs in `~/.codex/sessions`.
+
+Jambul never reads a login token.
+
 ## Performance
-Jambul aims for about 0% CPU while idle and less than 30 MB of memory. It reacts to system events instead of polling, and anything that animates on its own uses Core Animation and pauses while nobody can see the island.
+Jambul aims for about 0% CPU while idle and less than 30 MB of memory. It reacts to system events instead of polling. Anything that moves on its own either moves in short steps on a beat, holding still in between, or uses Core Animation, and it pauses while nobody can see the island.
 
 ## Contributing
 Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first, and see the [roadmap](docs/ROADMAP.md) and the [architecture notes](docs/ARCHITECTURE.md). Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).

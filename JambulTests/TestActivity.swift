@@ -27,11 +27,13 @@ final class TabbedTestActivity: IslandActivity {
     let id: String
     var isLive: Bool
     var priority: ActivityPriority
+    let countsAsStarted: Bool
 
-    init(id: String, isLive: Bool = false, priority: ActivityPriority = .normal) {
+    init(id: String, isLive: Bool = false, priority: ActivityPriority = .normal, countsAsStarted: Bool = true) {
         self.id = id
         self.isLive = isLive
         self.priority = priority
+        self.countsAsStarted = countsAsStarted
     }
 
     var compactLeading: some View { EmptyView() }

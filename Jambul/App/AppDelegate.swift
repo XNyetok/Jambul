@@ -6,7 +6,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let activities = ActivityCenter()
     private let preferences = Preferences()
-    private lazy var settings = SettingsWindowController(preferences: preferences)
+    private lazy var settings = SettingsWindowController(preferences: preferences, usage: usage)
     private var island: IslandController?
     private var statusItem: NSStatusItem?
     private lazy var timer = TimerActivity(activities: activities, onFinish: { [preferences] in
@@ -17,9 +17,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Made only when Jambul really launches: under tests it would pick up the running app's saved state and forget it.
     private var keepAwake: KeepAwakeActivity?
     private let power = PowerMonitor()
+    /// Lazy like Keep Awake, for the same reason: it remembers the last numbers in the real settings.
+    private lazy var usage = UsageActivity(activities: activities, defaults: .standard)
+    private let antigravityUsage = AntigravityUsageSource()
+    private let codexUsage = CodexUsageSource()
+    private var usageSocket: UsageSocket?
+    private lazy var claudeStatusLine = ClaudeStatusLineInstaller(
+        settingsURL: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/settings.json"),
+        savedURL: Self.supportFolder.appending(path: "claude-statusline.json"),
+        socketPath: Self.supportFolder.appending(path: "usage.sock").path)
     #if DEBUG
     private let demo = DemoActivity()
     #endif
+
+    /// ~/Library/Application Support/Jambul. Short enough for the socket's path, which a Unix socket limits.
+    private static var supportFolder: URL {
+        URL.applicationSupportDirectory.appending(path: "Jambul", directoryHint: .isDirectory)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Unit tests run inside the app; keep the island off the screen while they do.
@@ -30,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         activities.register(timer)
         activities.register(keepAwake)
         activities.register(battery)
+        activities.register(usage)
         #if DEBUG
         activities.register(demo)
         #endif
@@ -38,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             island.show()
             self.island = island
         }
+        startUsage()
         statusItem = makeStatusItem()
         // Once the island is there for its peeks; the first reading is only a starting point.
         // The battery first, so its low-battery warning comes before Keep Awake saying it turned off.
@@ -90,6 +106,95 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         settings.show()
+    }
+
+    // MARK: - Usage limits
+
+    private func startUsage() {
+        activities.onPeekShown = { [usage] in usage.peekWasShown($0) }
+        usage.onTabAppear = { [usage, antigravityUsage] in
+            if usage.enabled.contains(.antigravity) { antigravityUsage.refresh() }
+        }
+        usage.onConnect = { [weak self] _ in self?.openSettings() }
+        antigravityUsage.onReading = { [usage] in usage.record($0) }
+        antigravityUsage.onProblem = { [usage] in usage.markProblem(.antigravity, $0) }
+        codexUsage.onReading = { [usage] in usage.record($0) }
+        // The island applies its own settings; the usage settings ride along.
+        let islandSettingsChanged = preferences.onChange
+        preferences.onChange = { [weak self] in
+            islandSettingsChanged?()
+            self?.applyUsagePreferences()
+        }
+        // A limit may have started over during a sleep, and Antigravity's numbers moved on meanwhile.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
+                                                          queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.usage.checkResets()
+                if self.usage.enabled.contains(.antigravity) { self.antigravityUsage.refresh() }
+            }
+        }
+        applyUsagePreferences()
+    }
+
+    /// Starts and stops each source as the owner turns subscriptions on and off. Claude's status line changes only with
+    /// the owner's agreement, and goes back as it was once Claude is off.
+    private func applyUsagePreferences() {
+        let wanted = preferences.usageProviders
+        usage.enabled = UsageProvider.allCases.filter { wanted.contains($0) }
+        let claudeAgreed = preferences.claudeStatusLineAgreed
+        usage.needsConnecting = wanted.contains(.claude) && !claudeAgreed ? [.claude] : []
+
+        if wanted.contains(.claude), claudeAgreed {
+            startUsageSocket()
+            // Writes nothing when the line is already right, and brings an older line of Jambul's up to date.
+            do {
+                try claudeStatusLine.install()
+            } catch {
+                usage.markProblem(.claude, String(localized: "Couldn’t change Claude Code’s settings"))
+                Logger.app.error("usage: couldn't connect Claude Code's status line: \(error, privacy: .public)")
+            }
+        } else {
+            if claudeStatusLine.isInstalled() {
+                do {
+                    try claudeStatusLine.uninstall()
+                } catch {
+                    Logger.app.error("usage: couldn't disconnect Claude Code's status line: \(error, privacy: .public)")
+                }
+            }
+            usageSocket?.stop()
+            usageSocket = nil
+        }
+
+        if wanted.contains(.antigravity) {
+            antigravityUsage.start()
+            antigravityUsage.refresh()
+        } else {
+            antigravityUsage.stop()
+        }
+        if wanted.contains(.codex) {
+            codexUsage.start()
+        } else {
+            codexUsage.stop()
+        }
+    }
+
+    private func startUsageSocket() {
+        guard usageSocket == nil else { return }
+        let socket = UsageSocket(path: claudeStatusLine.socketPath) { [usage] input in
+            if let request = UsageParsing.claudeRequestTime(fromStatusLine: input) {
+                usage.noteClaudeRequestTime(request.milliseconds, session: request.session)
+            }
+            guard let windows = UsageParsing.claudeWindows(fromStatusLine: input) else { return }
+            usage.record(UsageReading(provider: .claude, windows: windows, measuredAt: .now))
+        }
+        do {
+            try socket.start()
+            usageSocket = socket
+        } catch {
+            usage.markProblem(.claude, String(localized: "Couldn’t listen for Claude Code"))
+            Logger.app.error("usage: couldn't open the socket: \(error, privacy: .public)")
+        }
     }
 
     @objc private func toggleKeepAwake() {
