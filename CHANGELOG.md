@@ -3,6 +3,8 @@
 All notable changes to Jambul are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Jambul uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-11-01
 The first public release.
 
 ### Added
@@ -14,3 +16,6 @@ The first public release.
 - The open island shows one feature per tab and opens on what's running, or on what was started last.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
+
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/XNyetok/Jambul/releases/tag/v0.1.0
