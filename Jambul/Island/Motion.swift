@@ -100,4 +100,45 @@ enum Motion {
     private static var reduceMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
+
+    /// The usage limits: each motion plays once, as something happens, so nothing moves at rest. The one exception is
+    /// Claude's logo turning while Claude Code works, and only while the open island shows it.
+    enum Usage {
+        /// A logo turning in as a peek or the tab comes out.
+        static let turn: Animation = .spring(duration: 0.9, bounce: 0.45)
+        static let turnFrom: Double = -90
+        static let turnScale: Double = 0.6
+        /// A logo popping in, one after another across the tab.
+        static let pop: Animation = .spring(duration: 0.45, bounce: 0.5)
+        static let popStagger: Double = 0.06
+        static let popScale: Double = 0.4
+        /// Antigravity's logo rising past its place and settling, as if weightless.
+        static let float: Animation = .spring(duration: 1.0, bounce: 0.55)
+        static let floatFrom: CGFloat = 7
+        /// A bar filling to its level as the tab or a peek comes out.
+        static let fill: Animation = .easeOut(duration: 0.75).delay(0.15)
+        static let fillStagger: Double = 0.08
+        /// The bar of a limit that started over, draining from full.
+        static let drain: Animation = .easeOut(duration: 1.0).delay(0.4)
+        /// One step of a beat: a pulse for urgency, a jump for good news.
+        static let beat: Animation = .spring(duration: 0.22, bounce: 0.3)
+        static let pulseScales: [Double] = [1, 1.3, 1, 1.2, 1]
+        static let bounceOffsets: [Double] = [0, -6, 0, -2, 0]
+        /// A logo whose limit ran out: smaller, tilted and dim, like it nodded off.
+        static let fallAsleep: Animation = .easeInOut(duration: 1.2).delay(0.45)
+        static let asleepScale: Double = 0.8
+        static let asleepTilt: Double = -18
+        static let asleepOpacity: Double = 0.45
+        static let sparks: Animation = .easeOut(duration: 0.75).delay(0.4)
+        static let sparkReach: CGFloat = 14
+        /// The tab's large number rising into place.
+        static let riseFrom: CGFloat = 7
+        /// The tab coming in with Reduce Motion: only a fade.
+        static let reducedFade: Animation = .easeOut(duration: 0.2)
+        /// Claude's logo while Claude Code works, only while the open island shows it: a step of one ray each beat,
+        /// with nothing moving in between. A turn that never stops cost about 25 CPU points in WindowServer (measured).
+        static let workingBeat: TimeInterval = 2
+        static let workingStep: Animation = .spring(duration: 0.6, bounce: 0.3)
+        static let workingStepAngle: Double = 36
+    }
 }

@@ -5,11 +5,13 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let preferences: Preferences
+    private let usage: UsageActivity?
     private let loginItem = LoginItem()
     private lazy var window = makeWindow()
 
-    init(preferences: Preferences) {
+    init(preferences: Preferences, usage: UsageActivity? = nil) {
         self.preferences = preferences
+        self.usage = usage
     }
 
     func show() {
@@ -24,7 +26,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     private func makeWindow() -> NSWindow {
-        let content = SettingsView(preferences: preferences, loginItem: loginItem)
+        let content = SettingsView(preferences: preferences, loginItem: loginItem, usage: usage)
         let window = NSWindow(contentViewController: NSHostingController(rootView: content))
         window.title = String(localized: "Jambul Settings")
         window.styleMask = [.titled, .closable]

@@ -14,7 +14,7 @@ Jambul is a background app (no Dock icon) that draws a Dynamic Island–style is
 Hover opens the island after a short intent delay, leaving closes it, and a click toggles it. Closing by click folds the island back to its lifted pill while the pointer stays, and hover leaves it closed until the pointer goes away. The island never vanishes from under a resting pointer, and a click always visibly does something. There are no swipe gestures: they stalled once the island shrank away from the pointer.
 
 ## Activities
-- Features are `IslandActivity` conformers in `Activities/`, registered with `ActivityCenter` in `AppDelegate`. Today these are the timer, Keep Awake and the battery, plus a demo activity in debug builds.
+- Features are `IslandActivity` conformers in `Activities/`, registered with `ActivityCenter` in `AppDelegate`. Today these are the timer, Keep Awake, the battery and the usage limits, plus a demo activity in debug builds.
 - The two most important live activities share the compact island; the second shows only its `compactMinimal` glyph, on the left.
 - The open island shows one activity's `tab` at a time, with the tabs beside the notch on the left. An activity without one, like the battery or the debug demo, gets no tab.
 - The island opens on the most important live activity's tab. With no live activity that has a tab, it opens on the tab of the activity started last, whether it was started from its tab or from anywhere else, such as the menu bar; this choice is remembered across launches. A tab someone only looked at doesn't count, and only a click changes the tab while the island is open.
@@ -34,6 +34,17 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 - Displays that change slowly, like the timer's countdown, redraw once a second with `TimelineView(.periodic)` and no animation (about 0.35% CPU). Rolling digits and `ProgressView(timerInterval:)` both drew at 60 fps.
 - Keep Awake's eye and laptop move on one shared beat (`KeepAwakeBeat`), so Jambul wakes once for both.
 - Views that redraw by themselves hold still while nobody can see the island (`IslandModel.isVisible`).
+
+## Usage limits
+- `UsageActivity` holds the last reading of each subscription and the time each limit starts over. It sits beside the notch from 95%, and posts peeks at 80% and 95%, at 100% and when a limit that reached 95% starts over.
+- Each warning is recorded only once the island has shown its peek (`ActivityCenter.peekWasShown`), so a peek nobody saw is asked for again. A window is told from the next by its reset time, and times within 30 minutes count as the same window, since a provider can move it a little between readings. Within a window, usage never goes down: two Claude Code sessions can report a point apart, and the higher number stands.
+- Nothing polls. Each source waits for something to happen:
+  - **Claude:** Claude Code's status line becomes a short shell line that hands its input to `UsageSocket`, a Unix socket in a folder only the owner can open, with macOS's own `nc`, then runs the owner's status line unchanged (`ClaudeStatusLineInstaller`). It names no path into Jambul, so moving or deleting Jambul breaks nothing.
+  - **Antigravity:** `agy -p /usage --output-format json` (about 6 s), once as Jambul starts or Antigravity is turned on, then when the Usage tab opens with numbers older than 5 minutes, when the Mac wakes, and while agy writes its log (FSEvents), at most once per 5 minutes. Its output goes to a file, and a run that hangs is stopped after 30 s, killed if it must.
+  - **Codex:** the `rate_limits` named "codex" that Codex writes into its session logs, read from the end of a log whenever FSEvents reports a change, and dated by when the log was written.
+- One wait at a time, for the next limit to start over.
+- The logos are their owners' trademarks (see `THIRD_PARTY_NOTICES.md`). Every usage motion plays once, except Claude's logo while Claude Code works: it turns one ray on a 2 s beat, holding still in between, and only while the open island shows it. Claude Code also sends its status line on a timer, so "working" means a session's request time grew in the last 20 s.
+- Coming beside the notch on its own, the usage activity doesn't count as started (`IslandActivity.countsAsStarted`), so the island doesn't keep opening on its tab afterwards.
 
 ## Sleep
 Anything due while the Mac sleeps waits for `NSWorkspace.didWakeNotification` before it shows or sounds. `Task.sleep` counts sleep time and can fire in a dark wake, with the display off and no audio; `didWake` only comes on a full wake.
