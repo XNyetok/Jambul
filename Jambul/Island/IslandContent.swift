@@ -76,7 +76,9 @@ struct ExpandedContent: View {
                 IslandTabBar(tabs: tabs, selected: model.selectedTab) { model.selectTab($0) }
                 Spacer(minLength: 0)
                 if model.isFullScreen {
+                    // Held to the room beside the notch, so the clock picks a face that fits there.
                     IslandClock()
+                        .frame(width: IslandLayout.besideNotchRoom(notch), alignment: .trailing)
                         .transition(.opacity)
                 }
             }
@@ -171,16 +173,40 @@ struct IslandClock: View {
     }
 }
 
-/// What `IslandClock` shows at `date`, like "Mon 2  09:41". The month doesn't fit beside the notch: with it, a day like
-/// "Wed 20 May" took 121 pt where there are 106.5 (measured).
+/// What `IslandClock` shows at `date`, like "Mon 2  09:41", as the person's locale writes it. The month doesn't fit
+/// beside the notch: with it, a day like "Wed 20 May" took 121 pt where there are 106.5 (measured). In the 24-hour
+/// locales measured, the day and date fit (99 pt at most), but a 12-hour clock's AM and PM can push them over (112 pt
+/// in US English, 120 in Korean), so the date gives way first, then the day, never the time.
 struct IslandClockFace: View {
     let date: Date
 
+    /// How much of the day goes before the time, most first. The clock shows the first that fits.
+    static var days: [Date.FormatStyle?] {
+        [.dateTime.weekday(.abbreviated).day(), .dateTime.weekday(.abbreviated), nil]
+    }
+
+    var body: some View {
+        let days = Self.days
+        ViewThatFits(in: .horizontal) {
+            IslandClockLine(date: date, day: days[0])
+            IslandClockLine(date: date, day: days[1])
+            IslandClockLine(date: date, day: days[2])
+        }
+    }
+}
+
+/// The time at `date`, after the day written in `day`'s format if there is one.
+struct IslandClockLine: View {
+    let date: Date
+    let day: Date.FormatStyle?
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(date, format: .dateTime.weekday(.abbreviated).day())
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+            if let day {
+                Text(date, format: day)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
             Text(date, format: .dateTime.hour().minute())
                 .font(.system(size: 13, weight: .semibold))
                 .monospacedDigit()

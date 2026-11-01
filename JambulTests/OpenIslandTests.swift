@@ -35,17 +35,41 @@ final class OpenIslandTests {
         #expect(bar.height <= notch.size.height)
     }
 
-    @Test func theClockFitsBesideTheNotchOnEveryDayOfTheYear() throws {
+    /// Every day of the year at its widest times, in locales with a 24-hour clock and with a 12-hour one, since the
+    /// clock writes the time as each person's locale does. It always fits, and it only drops the date or the day when
+    /// they wouldn't fit.
+    @Test(arguments: ["en_US", "en_GB", "en_ID", "id_ID", "de_DE", "fr_FR", "es_ES", "pt_BR", "ja_JP", "zh_Hans_CN",
+                      "ko_KR", "hi_IN"])
+    func theClockFitsBesideTheNotchOnEveryDayOfTheYear(localeID: String) throws {
         let room = IslandLayout.besideNotchRoom(notch)
-        let calendar = Calendar.current
-        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 23, minute: 58)))
-        var widest: (width: CGFloat, date: Date) = (0, start)
+        let locale = Locale(identifier: localeID)
+        let timeZone = try #require(TimeZone(identifier: "UTC"))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        calendar.timeZone = timeZone
         for day in 0..<365 {
-            let date = try #require(calendar.date(byAdding: .day, value: day, to: start))
-            let width = NSHostingView(rootView: IslandClockFace(date: date)).fittingSize.width
-            if width > widest.width { widest = (width, date) }
+            for hour in [10, 23] {
+                let moment = DateComponents(year: 2026, month: 1, day: 1 + day, hour: hour, minute: 58)
+                let date = try #require(calendar.date(from: moment))
+                let lines = try IslandClockFace.days.map { day in
+                    try width(of: IslandClockLine(date: date, day: day).environment(\.locale, locale)
+                        .environment(\.timeZone, timeZone), proposedWidth: nil)
+                }
+                let face = IslandClockFace(date: date).environment(\.locale, locale).environment(\.timeZone, timeZone)
+                let shown = try width(of: face, proposedWidth: room)
+                guard let fitting = lines.first(where: { $0 <= room }), shown == fitting else {
+                    Issue.record("\(localeID), \(date): \(shown) pt shown in \(room) pt, out of \(lines)")
+                    return
+                }
+            }
         }
-        #expect(widest.width <= room, "\(widest.date) is \(widest.width) pt wide, with room for \(room)")
+    }
+
+    /// The width a view takes when offered `proposedWidth`, or all it wants when offered nothing.
+    private func width(of view: some View, proposedWidth: CGFloat?) throws -> CGFloat {
+        let renderer = ImageRenderer(content: view)
+        renderer.proposedSize = ProposedViewSize(width: proposedWidth, height: nil)
+        return try #require(renderer.nsImage).size.width
     }
 
     @Test func aClickOnATabChangesTheTabAndLeavesTheIslandOpen() async throws {

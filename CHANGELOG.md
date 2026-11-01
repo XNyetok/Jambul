@@ -12,5 +12,5 @@ The first public release.
 - Battery peeks for plugging and unplugging the charger and a full battery, and low-battery warnings at 20% and 5% that wait until someone can see them.
 - Several activities at once: the two most important share the compact island.
 - The open island shows one feature per tab and opens on what's running, or on what was started last.
-- Day and time beside the notch while a full-screen app hides the menu bar, and an option to hide the island in full screen.
+- Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
