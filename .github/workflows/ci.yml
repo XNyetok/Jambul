@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["**"]
+    tags: ["**"]
+  # A full scan every day catches what no push event shows, such as more than three tags pushed at once.
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A pull request's newer runs replace its older ones. Every push gets a group of its own, since a cancelled or
+  # replaced push run would leave that push's commits unscanned.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scan:
+    name: Secrets, personal data and AI attribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Maintainers' private strings, kept as a secret so the repository doesn't publish them. Pull requests from
+      # forks and Dependabot's runs don't get secrets and are scanned with the public rules only; any other run
+      # without them fails.
+      JAMBUL_PRIVATE_PATTERNS: ${{ secrets.JAMBUL_PRIVATE_PATTERNS }}
+      JAMBUL_REQUIRE_PRIVATE_PATTERNS: >-
+        ${{ github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request'
+        || github.event.pull_request.head.repo.full_name == github.repository) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: scripts/ci-install-gitleaks.sh
+
+      # The scan the git hooks run, for anything pushed with the hooks skipped or missing.
+      - name: Scan the new commits
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            scripts/scan.sh range "$BASE..$HEAD"
+          elif [ "$EVENT" = push ] && [ "$REF_TYPE" = branch ] && git cat-file -e "$BEFORE^{commit}" 2> /dev/null; then
+            scripts/scan.sh range "$BEFORE..$GITHUB_SHA"
+          else
+            # A new branch, a tag, or the daily run: every commit, tag and ref name.
+            scripts/scan.sh history
+          fi
+
+      - name: Scan the files
+        run: scripts/scan.sh tree
+
+  test:
+    name: Build and unit tests
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # Xcode 27, the version Jambul is developed with. GitHub lists this image as a preview.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Unit tests
+        run: ./scripts/test.sh

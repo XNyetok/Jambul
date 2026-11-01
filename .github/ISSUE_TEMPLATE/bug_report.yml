@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in Jambul doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please keep personal details out of this issue: logs, crash reports and screenshots can show your username, your Mac's name or your files, so trim them before posting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a 5-minute timer
+        2. Lock the screen
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: jambul-version
+    attributes:
+      label: Jambul version
+      description: Menu bar bird → About Jambul.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "macOS 15.5"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac and display
+      description: Your Mac's model, and whether this happened on its built-in screen or an external display.
+      placeholder: "MacBook Pro 14-inch (M4), built-in screen"
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log (optional)
+      description: |
+        Jambul logs what the island does. To see the last 10 minutes, run this in Terminal:
+        `/usr/bin/log show --last 10m --predicate 'subsystem == "com.debikurnia.Jambul"'`
+        Remove anything personal before pasting.
+      render: text

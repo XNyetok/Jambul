@@ -1,0 +1,15 @@
+name: Feature request
+description: An idea for Jambul.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Jambul to do?
+      description: The situation you're in, and what you'd like to happen. A sketch or an example helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried or considered?

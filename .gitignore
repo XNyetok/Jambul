@@ -1,0 +1,33 @@
+# Build output and Xcode's per-user files
+.DS_Store
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Logs and diagnostic reports name the machine and its user
+*.log
+*.ips
+*.crash
+*.spindump
+*.shutdownStall
+*.diag
+
+# Secrets and signing material
+.env
+.env.*
+*.p12
+*.pfx
+*.cer
+*.pem
+*.key
+*.p8
+*.mobileprovision
+*.provisionprofile
+
+# Files that stay on one person's Mac: personal instructions for Claude Code and its local settings
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Phase plans with evidence from someone's own Mac stay in private notes
+docs/PHASE-*.md

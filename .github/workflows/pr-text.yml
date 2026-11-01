@@ -1,0 +1,34 @@
+name: Pull request text
+
+# Nothing else checks what a pull request says about itself, and its title becomes the squash commit's subject.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Title and description
+    # Dependabot writes its own descriptions, full of upstream release notes.
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: scripts/ci-install-gitleaks.sh
+
+      - name: Scan the title and description
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          JAMBUL_PRIVATE_PATTERNS: ${{ secrets.JAMBUL_PRIVATE_PATTERNS }}
+          JAMBUL_REQUIRE_PRIVATE_PATTERNS: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          printf '%s\n\n%s\n' "$TITLE" "$BODY" > "$RUNNER_TEMP/pull-request.txt"
+          scripts/scan.sh text "$RUNNER_TEMP/pull-request.txt"

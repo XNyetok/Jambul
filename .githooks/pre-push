@@ -1,0 +1,9 @@
+#!/bin/sh
+# Jambul's pre-push hook, installed into .git/hooks by scripts/setup.sh. It runs the checkout's own scripts/scan.sh, and
+# refuses when there's none, as on a branch from before the scan existed, rather than let anything through unscanned.
+scan="$(git rev-parse --show-toplevel)/scripts/scan.sh"
+if [ ! -x "$scan" ]; then
+    echo "✘ This checkout has no scripts/scan.sh, so nothing can be checked, and git won't push. Switch to a branch that has it." >&2
+    exit 1
+fi
+exec "$scan" pre-push "$@"

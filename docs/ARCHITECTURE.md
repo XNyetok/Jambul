@@ -1,0 +1,54 @@
+# Architecture
+
+Jambul is a background app (no Dock icon) that draws a Dynamic Island–style island around the MacBook notch. AppKit owns the app's lifecycle and windows; SwiftUI draws the island. This page explains how the pieces fit and why they're built the way they are.
+
+## Windows and the pointer
+- AppKit owns lifecycle and windows (`App/main.swift`, `AppDelegate`, `IslandPanel`); SwiftUI draws the island inside them.
+- Two panels split the pointer work. A notch-sized hot-zone panel listens all the time. The larger island panel ignores the mouse while the island is idle, so nothing outside the notch ever blocks clicks.
+- Clicks only land on drawn pixels (hover doesn't care), which is why the hot zone fills the notch in black.
+- Distributed notifications (`com.apple.screenIsLocked` and the like) are observed with `suspensionBehavior: .deliverImmediately`. AppKit holds them back while the app isn't active, which for Jambul is nearly always.
+
+## The island's state machine
+`IslandModel` (`@Observable`) is the island's state machine, and views are a pure function of it. The island is `idle` behind the notch, `compact` with a live activity beside the notch, `lifted` while the pointer rests on it, showing a `peek`, or `expanded`.
+
+Hover opens the island after a short intent delay, leaving closes it, and a click toggles it. Closing by click folds the island back to its lifted pill while the pointer stays, and hover leaves it closed until the pointer goes away. The island never vanishes from under a resting pointer, and a click always visibly does something. There are no swipe gestures: they stalled once the island shrank away from the pointer.
+
+## Activities
+- Features are `IslandActivity` conformers in `Activities/`, registered with `ActivityCenter` in `AppDelegate`. Today these are the timer, Keep Awake and the battery, plus a demo activity in debug builds.
+- The two most important live activities share the compact island; the second shows only its `compactMinimal` glyph, on the left.
+- The open island shows one activity's `tab` at a time, with the tabs beside the notch on the left. An activity without one, like the battery or the debug demo, gets no tab.
+- The island opens on the most important live activity's tab. With no live activity that has a tab, it opens on the tab of the activity started last, whether it was started from its tab or from anywhere else, such as the menu bar; this choice is remembered across launches. A tab someone only looked at doesn't count, and only a click changes the tab while the island is open.
+- Each activity has a `tint` for its glyphs, tab and buttons.
+- While a full-screen app hides the menu bar, the open island shows the day and time beside the notch on the right.
+
+## Peeks
+- Activities post short messages as a `Peek` through `ActivityCenter`.
+- A peek that arrives while the island is open, or while a hover is about to open it, waits and shows as the island closes (after a click-close, once the pointer leaves), if it is still fresh by then.
+- Must-see news about something the island doesn't show (when open, anything but the chosen tab) waits however long the island stays open.
+- A peek marked `mustBeSeen` ("Timer done", low battery) also waits while nobody can see the island (display asleep, screen locked), and comes out even while the island is hidden for a full-screen app. Other peeks are dropped then.
+- Waiting peeks stand in one line, must-see first. No other activity's peek cuts a must-see one short, and a newer peek from the same activity (`Peek.source`) replaces its own.
+
+## Motion and drawing
+- Every animation parameter lives in `Island/Motion.swift`. Views don't define their own springs.
+- Always-on ambient animations (visualizers, pulses) use Core Animation rather than repeating SwiftUI animations; on a MacBook Air that measured about 8–10× less CPU. Core Animation moves the cost rather than removing it, though: a continuous animation still cost WindowServer about 16 CPU points.
+- Displays that change slowly, like the timer's countdown, redraw once a second with `TimelineView(.periodic)` and no animation (about 0.35% CPU). Rolling digits and `ProgressView(timerInterval:)` both drew at 60 fps.
+- Keep Awake's eye and laptop move on one shared beat (`KeepAwakeBeat`), so Jambul wakes once for both.
+- Views that redraw by themselves hold still while nobody can see the island (`IslandModel.isVisible`).
+
+## Sleep
+Anything due while the Mac sleeps waits for `NSWorkspace.didWakeNotification` before it shows or sounds. `Task.sleep` counts sleep time and can fire in a dark wake, with the display off and no audio; `didWake` only comes on a full wake.
+
+## Geometry
+- The notch can sit on a half point (x = 645.5 on a 13-inch MacBook Air), while AppKit snaps window origins down to whole points. So panels are framed on whole points, and the notch shape is placed inside them (`NotchGeometry.panelFrame`, `hotZoneFrame`).
+- The compact island is as tall as the menu bar band (33 pt on that MacBook Air). The band hides the camera housing, and full-screen windows start right below it (measured: y = 33), so the island never covers them.
+- Its content sits as far from the drawn sides as from the top and bottom (8.5 pt there), as Apple asks for in the Dynamic Island. The top flares make the drawn body 6 pt narrower than the frame on each side, so margins are measured from the drawn edge (`IslandLayout.compactMargin`).
+
+## Settings and system state
+- Settings live in `Preferences` (`@Observable`, saved to `UserDefaults` on each change), and `IslandController` applies them.
+- Full-screen detection is `SpaceInspector`, which reads SkyLight's Space type (4 is full screen) on each Space change. SkyLight is a private framework, so it is loaded at runtime, and if it ever goes away every Space reads as a regular desktop.
+
+## Buttons inside the island
+- Buttons inside the island fire on the first click and don't reach the island's own tap. They're styled with `IslandButtonStyle`, whose fill is the hit area.
+- They never use `.disabled`: a disabled button passes the click through to the island's toggle.
+- Tabs use `IslandTabButtonStyle`, whose capsule is the hit area, though only the chosen tab draws it.
+- A control that gives way to another in the same spot, like Keep Awake's Stop to Turn On, swaps only as the live activities change. That arms the guard against the rest of a double click (`IslandModel.acceptsPress`).

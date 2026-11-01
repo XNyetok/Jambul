@@ -1,0 +1,84 @@
+name: Release
+
+# Builds and publishes a release when a version tag such as v0.2.0 is pushed. See docs/RELEASING.md.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Secrets, personal data and AI attribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: scripts/ci-install-gitleaks.sh
+
+      # Nothing is published unless every commit and tag, this one included, is clean.
+      - name: Scan everything
+        env:
+          JAMBUL_PRIVATE_PATTERNS: ${{ secrets.JAMBUL_PRIVATE_PATTERNS }}
+          JAMBUL_REQUIRE_PRIVATE_PATTERNS: "true"
+        run: scripts/scan.sh history
+
+  release:
+    name: Build and publish
+    needs: scan
+    runs-on: xcode-27
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the version
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          if ! grep -q "MARKETING_VERSION: \"$version\"" project.yml; then
+            echo "::error::project.yml's MARKETING_VERSION isn't $version"
+            exit 1
+          fi
+          if ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          xcodebuild -project Jambul.xcodeproj -scheme Jambul -configuration Release \
+            -destination "generic/platform=macOS" -derivedDataPath build/DerivedData build
+
+      # Ad-hoc signed and not notarized until Jambul has an Apple Developer ID; the README explains how to open it.
+      - name: Package
+        run: |
+          app=build/DerivedData/Build/Products/Release/Jambul.app
+          # The project file is generated from project.yml; a stale one would name the app another version.
+          built=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist")
+          if [ "$built" != "$VERSION" ]; then
+            echo "::error::The built app says $built, not $VERSION: run xcodegen generate and commit the project"
+            exit 1
+          fi
+          codesign --verify --deep --strict "$app"
+          ditto -c -k --keepParent "$app" "Jambul-$VERSION.zip"
+          shasum -a 256 "Jambul-$VERSION.zip" > "Jambul-$VERSION.zip.sha256"
+          awk -v heading="## [$VERSION]" 'index($0, heading) == 1 { on = 1; next } on && /^## \[/ { exit } on' \
+            CHANGELOG.md > notes.md
+          test -s notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "Jambul-$VERSION.zip" "Jambul-$VERSION.zip.sha256" \
+            --title "Jambul $VERSION" --notes-file notes.md --verify-tag

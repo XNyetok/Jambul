@@ -1,0 +1,5 @@
+{{- /* How gitleaks hands its findings to scripts/scan.sh: rule, file and line, separated by "|". The text around a
+finding is left out, since it could carry something private the finding itself isn't about. */ -}}
+{{- range . }}
+{{ .RuleID }}|{{ .File }}|{{ .StartLine }}
+{{- end }}
