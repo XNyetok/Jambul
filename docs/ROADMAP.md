@@ -22,11 +22,7 @@ Where Jambul is and where it's heading. Plans change as we learn; open an issue 
 - **Keep Awake:** keeps the display on until it's turned off, for long downloads, builds or agents, with an eye and a typing laptop beside the notch. It turns itself off at 20% battery.
 - **Several activities at once:** the two most important share the compact island.
 - **Tabs:** the open island shows one feature per tab, with one color per feature.
-
-## Now: open source
-- A public repository with a clean history, documentation and contribution guides.
-- CI on every pull request: build, unit tests, and a scan that keeps secrets and personal data out.
-- Releases on GitHub, built by a workflow.
+- **Open source:** a public repository with documentation and contribution guides, and CI on every pull request: build, unit tests, and a scan that keeps secrets and personal data out. Releases are built by a workflow and published on GitHub, starting with 0.1.0.
 
 ## Next
 The next feature comes from this list:
