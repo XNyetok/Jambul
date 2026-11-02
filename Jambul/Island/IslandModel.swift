@@ -31,9 +31,9 @@ enum PointerRegion: Hashable {
 /// waits, and shows as the island closes if it is still fresh by then. One the owner must see also waits while nobody
 /// can see the island, until someone can, and never gives way to another activity's peek: those wait their turn.
 ///
-/// The open island shows one activity's tab at a time. It opens on the most important live activity's tab, or with
-/// nothing live on the tab of the activity started last, remembered across launches. Only a click on another tab
-/// changes it while it is open, and only for then: looking at a tab doesn't make the island open there next time.
+/// The open island shows one activity's tab at a time. It first opens on the first tab, Home, and from then on on the
+/// tab it showed last. Only a click changes the tab, on another tab or on a card on Home; activities starting, running
+/// or ending leave it where it is.
 @MainActor
 @Observable
 final class IslandModel {
@@ -103,27 +103,11 @@ final class IslandModel {
     @ObservationIgnored private var waiting: [WaitingPeek] = []
     /// When the peek showing now is due to close, for lining up the next one behind it.
     @ObservationIgnored private var peekEnds: ContinuousClock.Instant?
-    /// The tab of the activity started last, for opening with nothing live. Starting it from anywhere counts, the menu
-    /// bar too; a glance at a tab doesn't, or the next opening would land on a tab the owner only looked at.
-    @ObservationIgnored private var lastStartedTab: String? {
-        didSet {
-            guard lastStartedTab != oldValue else { return }
-            Logger.island.notice("opening tab → \(self.lastStartedTab ?? "none", privacy: .public)")
-            defaults?.set(lastStartedTab, forKey: Self.lastStartedTabKey)
-        }
-    }
-    private let defaults: UserDefaults?
-    private static let lastStartedTabKey = "lastStartedTab"
 
-    /// - Parameter defaults: Where the tab started last is kept for the next launch. Without one, as in tests and
-    ///   previews, it lasts only as long as the model.
-    init(notch: NotchMetrics, activities: ActivityCenter, presentation: IslandPresentation? = nil, peek: Peek? = nil,
-         defaults: UserDefaults? = nil) {
+    init(notch: NotchMetrics, activities: ActivityCenter, presentation: IslandPresentation? = nil, peek: Peek? = nil) {
         let live = activities.liveActivities
         self.notch = notch
         self.center = activities
-        self.defaults = defaults
-        lastStartedTab = defaults?.string(forKey: Self.lastStartedTabKey)
         self.liveActivities = live
         self.peek = peek
         self.presentation = presentation ?? (live.isEmpty ? .idle : .compact)
@@ -154,14 +138,18 @@ final class IslandModel {
         IslandLayout(presentation, notch: notch, compactSlotWidth: compactSlotWidth)
     }
 
-    /// Shows another activity's tab in the open island, from a click on it. The island opens there again only once
-    /// something on it starts.
-    func selectTab(_ id: String) {
+    /// Shows another activity's tab in the open island, from a click on its tab or on its card on Home. The island
+    /// opens on it from then on, until another is chosen.
+    /// - Parameter replacingWhatWasClicked: The click came from the content below the notch, like a card on Home, which
+    ///   the tab now replaces under the pointer. The rest of a double click begun there would land on the tab, so it is
+    ///   ignored, as when a control gives way to another (`acceptsPress`). A tab's own button stays where it is.
+    func selectTab(_ id: String, replacingWhatWasClicked: Bool = false) {
         let tabs = self.tabs
         guard let next = tabs.firstIndex(where: { $0.id == id }) else { return }
         guard presentation == .expanded, id != selectedTab else { return }
         let current = tabs.firstIndex { $0.id == selectedTab } ?? next
         Logger.island.notice("tab → \(id, privacy: .public)")
+        if replacingWhatWasClicked { pressesAimAtOldContent = true }
         withAnimation(Motion.tabChange) {
             tabArrivesFrom = next > current ? .trailing : .leading
             selectedTab = id
@@ -361,13 +349,11 @@ final class IslandModel {
 
     private var resting: IslandPresentation { liveActivities.isEmpty ? .idle : .compact }
 
-    /// The tab the island opens on: the most important live activity's, or with none live, the tab of the one started
-    /// last, and before anything has started the first.
+    /// The tab the island opens on: the one it showed last, and the first time the first, Home. What is live doesn't
+    /// pull it anywhere: it already shows beside the notch, and its symbol among the tabs keeps its color.
     private var tabOnOpening: String? {
         let tabs = self.tabs
-        let hasTab = { (id: String) in tabs.contains { $0.id == id } }
-        if let live = liveActivities.first(where: { hasTab($0.id) }) { return live.id }
-        if let lastStartedTab, hasTab(lastStartedTab) { return lastStartedTab }
+        if let selectedTab, tabs.contains(where: { $0.id == selectedTab }) { return selectedTab }
         return tabs.first?.id
     }
 
@@ -422,12 +408,6 @@ final class IslandModel {
     private func liveActivityDidChange() {
         let live = center.liveActivities
         guard live.map(\.id) != liveActivities.map(\.id) else { return }
-        // A start is an activity joining the live ones. Keep Awake turned back on from the menu bar within its 0.3 s of
-        // closing never leaves them, so it goes unrecorded; the tab's own Turn On only appears after it has left.
-        let wasLive = Set(liveActivities.map(\.id))
-        if let started = live.first(where: { $0.hasTab && $0.countsAsStarted && !wasLive.contains($0.id) }) {
-            lastStartedTab = started.id
-        }
         let next: IslandPresentation = isResting ? (live.isEmpty ? .idle : .compact) : presentation
         if next == .expanded { pressesAimAtOldContent = true }
         // A pointer resting on the lifted island or a peek keeps the old activity's room, so the island doesn't narrow
@@ -484,7 +464,7 @@ final class IslandModel {
             // At rest or open, the island no longer keeps room for the pointer.
             if next != .lifted && next != .peek { heldSlotWidth = nil }
             changes()
-            // After the changes, so a tab follows the activities that are live as the island opens.
+            // Opening on the tab it showed last, or the first time on the first.
             if opening { selectedTab = tabOnOpening }
             presentation = next
         }

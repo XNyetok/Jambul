@@ -188,7 +188,8 @@ private struct PeekProgress: View {
 }
 
 /// The open island: the tabs beside the notch on the left, the time on the right while a full-screen app hides the
-/// menu bar's, and below the notch the chosen activity's tab. One activity at a time, so two never mix on one screen.
+/// menu bar's, and below the notch the chosen activity's tab. One activity at a time, so two never mix on one screen;
+/// Home, the first tab, sums them all up.
 struct ExpandedContent: View {
     let model: IslandModel
 
@@ -197,7 +198,10 @@ struct ExpandedContent: View {
         let tabs = model.tabs
         ZStack(alignment: .top) {
             HStack(spacing: 0) {
-                IslandTabBar(tabs: tabs, selected: model.selectedTab) { model.selectTab($0) }
+                IslandTabBar(tabs: tabs, selected: model.selectedTab,
+                             buttonWidth: IslandLayout.tabButtonWidth(count: tabs.count, notch: notch)) {
+                    model.selectTab($0)
+                }
                 Spacer(minLength: 0)
                 if model.isFullScreen {
                     // Held to the room beside the notch, so the clock picks a face that fits there.
@@ -218,6 +222,7 @@ struct ExpandedContent: View {
                         .transition(Motion.tabContentTransition(arrivingFrom: model.tabArrivesFrom))
                 }
             }
+            .environment(\.selectIslandTab, SelectTabAction { model.selectTab($0, replacingWhatWasClicked: true) })
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, notch.size.height + IslandLayout.expandedContentTopGap)
             .padding(.bottom, IslandLayout.expandedContentBottomInset)
@@ -232,6 +237,8 @@ struct ExpandedContent: View {
 struct IslandTabBar: View {
     let tabs: [any IslandActivity]
     let selected: String?
+    /// Each button's width, narrower than `IslandLayout.tabButtonSize` when more tabs must fit (`tabButtonWidth`).
+    var buttonWidth = IslandLayout.tabButtonSize.width
     let select: (String) -> Void
     @Namespace private var highlight
 
@@ -241,7 +248,7 @@ struct IslandTabBar: View {
                 let isSelected = activity.id == selected
                 Button { select(activity.id) } label: {
                     IslandTabLabel(symbol: activity.tabSymbol, tint: activity.tint, isSelected: isSelected,
-                                   isLive: activity.isLive)
+                                   isLive: activity.isLive, width: buttonWidth)
                         .background {
                             if isSelected {
                                 Capsule()
@@ -264,13 +271,14 @@ private struct IslandTabLabel: View {
     let tint: Color
     let isSelected: Bool
     let isLive: Bool
+    let width: CGFloat
     @State private var isHovered = false
 
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(isSelected || isLive ? tint : .white.opacity(isHovered ? 0.62 : 0.36))
-            .frame(width: IslandLayout.tabButtonSize.width, height: IslandLayout.tabButtonSize.height)
+            .frame(width: width, height: IslandLayout.tabButtonSize.height)
             .onHover { isHovered = $0 }
             .animation(Motion.tabHover, value: isHovered)
     }

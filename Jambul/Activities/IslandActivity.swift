@@ -5,12 +5,14 @@ import SwiftUI
 /// Activities are `@Observable` classes registered with `ActivityCenter`. While `isLive` is true, an activity rests
 /// beside the notch in its compact form: alone it takes both sides, and sharing with a more important one it shows its
 /// `compactMinimal` glyph on the left. An activity with a `tab` gets its own tab in the open island, which shows one
-/// activity at a time: what starts it while idle, its state and controls while live.
+/// activity at a time: what starts it while idle, its state and controls while live. One with a `homeCard` also shows
+/// on Home, the first tab, which sums up what each is doing.
 @MainActor
 protocol IslandActivity: AnyObject, Observable {
     associatedtype CompactLeading: View
     associatedtype CompactTrailing: View
     associatedtype Tab: View = EmptyView
+    associatedtype HomeCard: View = EmptyView
 
     /// Stable identifier, e.g. "timer".
     var id: String { get }
@@ -25,9 +27,9 @@ protocol IslandActivity: AnyObject, Observable {
     var tint: Color { get }
     /// The symbol on its tab.
     var tabSymbol: String { get }
-    /// Whether coming live means the owner started it, which makes its tab the one the island opens on later. One that
-    /// comes live on its own, like the usage limits nearing their end, doesn't.
-    var countsAsStarted: Bool { get }
+    /// Whether its card shows on Home now. One with nothing to say for a while stays off it, like the usage limits with
+    /// every subscription turned off.
+    var showsHomeCard: Bool { get }
 
     @ViewBuilder var compactLeading: CompactLeading { get }
     @ViewBuilder var compactTrailing: CompactTrailing { get }
@@ -37,6 +39,8 @@ protocol IslandActivity: AnyObject, Observable {
     /// glyph on the left, what it is in the
     /// middle and its buttons on the right.
     @ViewBuilder var tab: Tab { get }
+    /// Its card on Home: what it is doing now, at a glance, laid out with `HomeCardContent`.
+    @ViewBuilder var homeCard: HomeCard { get }
 }
 
 extension IslandActivity {
@@ -45,19 +49,29 @@ extension IslandActivity {
     var compactSlotWidth: CGFloat { 36 }
     var tint: Color { .white }
     var tabSymbol: String { "circle.fill" }
-    var countsAsStarted: Bool { true }
+    var showsHomeCard: Bool { hasHomeCard }
     var compactMinimal: AnyView { AnyView(compactLeading) }
 
     /// Whether the activity has a tab in the open island.
     var hasTab: Bool { Tab.self != EmptyView.self }
 
+    /// Whether the activity has a card on Home.
+    var hasHomeCard: Bool { HomeCard.self != EmptyView.self }
+
     /// The tab, type-erased for the open island. Erased here rather than at the call site: with the default tab below,
     /// Swift won't open an `any IslandActivity` to read it.
     var anyTab: AnyView { AnyView(tab) }
+
+    /// The card, type-erased for Home, for the same reason as `anyTab`.
+    var anyHomeCard: AnyView { AnyView(homeCard) }
 }
 
 extension IslandActivity where Tab == EmptyView {
     var tab: EmptyView { EmptyView() }
+}
+
+extension IslandActivity where HomeCard == EmptyView {
+    var homeCard: EmptyView { EmptyView() }
 }
 
 enum ActivityPriority: Int, Comparable {

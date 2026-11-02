@@ -18,21 +18,59 @@ final class OpenIslandTests {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    /// The timer and Keep Awake, as Jambul registers them, neither of them live.
-    private func registerTabs() -> (timer: TimerActivity, keepAwake: KeepAwakeActivity) {
+    /// Jambul's activities as it registers them, none of them live: Home, the timer, Keep Awake, the battery and the
+    /// usage limits. With `everyCard`, the battery has a reading and Claude is turned on, so Home shows all four cards;
+    /// without, as on a Mac without a battery and with no subscription on, only the timer's and Keep Awake's.
+    private func registerJambulsActivities(everyCard: Bool = true)
+        -> (home: HomeActivity, timer: TimerActivity, keepAwake: KeepAwakeActivity) {
+        let home = HomeActivity(activities: activities)
         let timer = TimerActivity(activities: activities, keepsMacAwake: false)
         let keepAwake = KeepAwakeActivity(activities: activities, defaults: defaults, bootSession: nil, holdsScreen: false)
-        activities.register(timer)
-        activities.register(keepAwake)
-        return (timer, keepAwake)
+        let battery = BatteryActivity(activities: activities)
+        let usage = UsageActivity(activities: activities)
+        let all: [any IslandActivity] = [home, timer, keepAwake, battery, usage]
+        for activity in all { activities.register(activity) }
+        if everyCard {
+            battery.update(PowerState(percent: 76, isOnExternalPower: false))
+            usage.enabled = [.claude]
+        }
+        return (home, timer, keepAwake)
     }
 
-    @Test func theTabsFitBesideTheNotch() {
-        let (timer, keepAwake) = registerTabs()
-        let bar = NSHostingView(rootView: IslandTabBar(tabs: [timer, keepAwake], selected: timer.id) { _ in }).fittingSize
+    /// Where the open island's left edge sits in its panel, which it hangs centered in.
+    private var islandLeft: CGFloat {
+        (IslandLayout.canvasSize(notch).width - IslandLayout.expandedSize.width) / 2
+    }
+
+    /// Toward the right of the card at `index` on Home, of `count` side by side, away from its symbol and its words,
+    /// which sit on the left: the whole card is the button. The cards share the room below the notch, centered in its
+    /// height.
+    private func cardPoint(_ index: Int, of count: Int) -> CGPoint {
+        let room = IslandLayout.expandedSize.width - 2 * IslandLayout.expandedContentInset
+        let width = (room - CGFloat(count - 1) * HomeCardStyle.spacing) / CGFloat(count)
+        let left = islandLeft + IslandLayout.expandedContentInset + CGFloat(index) * (width + HomeCardStyle.spacing)
+        return CGPoint(x: left + width - 6, y: contentMiddle)
+    }
+
+    /// Every tab Jambul has fits beside the notch, the MacBook Air's measured one and wider ones too.
+    @Test(arguments: [179, 190, 200, 210, 220] as [CGFloat])
+    func everyTabFitsBesideTheNotch(notchWidth: CGFloat) {
+        let (home, _, _) = registerJambulsActivities()
+        let notch = NotchMetrics(size: CGSize(width: notchWidth, height: 32), compactHeight: 33)
+        let tabs = activities.activities.filter(\.hasTab)
+        let width = IslandLayout.tabButtonWidth(count: tabs.count, notch: notch)
+        let bar = NSHostingView(rootView: IslandTabBar(tabs: tabs, selected: home.id, buttonWidth: width) { _ in })
+            .fittingSize
         let room = IslandLayout.besideNotchRoom(notch)
-        #expect(bar.width <= room, "the tabs are \(bar.width) pt wide, with room for \(room)")
+        #expect(bar.width <= room, "\(tabs.count) tabs are \(bar.width) pt wide, with room for \(room)")
         #expect(bar.height <= notch.size.height)
+    }
+
+    /// Beside the MacBook Air's notch, three tabs keep their full width and four narrow to fit, so the island keeps its
+    /// size.
+    @Test func tabsNarrowOnlyWhenTheyWouldntFit() {
+        #expect(IslandLayout.tabButtonWidth(count: 3, notch: notch) == IslandLayout.tabButtonSize.width)
+        #expect(IslandLayout.tabButtonWidth(count: 4, notch: notch) == 25)
     }
 
     /// Every day of the year at its widest times, in locales with a 24-hour clock and with a 12-hour one, since the
@@ -73,45 +111,74 @@ final class OpenIslandTests {
     }
 
     @Test func aClickOnATabChangesTheTabAndLeavesTheIslandOpen() async throws {
-        let (timer, keepAwake) = registerTabs()
+        let (home, _, keepAwake) = registerJambulsActivities()
         let model = IslandModel(notch: notch, activities: activities, presentation: .expanded)
-        #expect(model.selectedTab == timer.id)
-        let canvas = IslandLayout.canvasSize(notch)
-        // A window only takes clicks while it is ordered in; this one sits far off every screen.
-        let panel = IslandPanel(contentRect: CGRect(origin: CGPoint(x: -20_000, y: -20_000), size: canvas))
-        panel.contentView = NSHostingView(rootView: IslandView(model: model))
-        panel.orderFrontRegardless()
+        #expect(model.selectedTab == home.id)
+        let panel = try await openPanel(on: model)
         defer { panel.orderOut(nil) }
-        try await Task.sleep(for: .milliseconds(100))
 
-        // Near the left end of Keep Awake's tab, the second beside the notch, where its symbol doesn't reach: the whole
-        // pill is the tab's. The island hangs centered in its panel, and the tabs start at its content's inset,
-        // centered in the notch's height.
-        let secondTab = (canvas.width - IslandLayout.expandedSize.width) / 2 + IslandLayout.expandedContentInset
-            + IslandLayout.tabButtonSize.width + IslandLayout.tabButtonSpacing
-        let tab = CGPoint(x: secondTab + 4, y: canvas.height - notch.size.height / 2)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            panel.sendEvent(mouseEvent(type, at: tab, in: panel))
-        }
+        // Near the left end of Keep Awake's tab, the third beside the notch, where its symbol doesn't reach: the whole
+        // pill is the tab's. The tabs start at the island's content inset, centered in the notch's height.
+        let canvas = IslandLayout.canvasSize(notch)
+        let count = model.tabs.count
+        let step = IslandLayout.tabButtonWidth(count: count, notch: notch) + IslandLayout.tabButtonSpacing
+        let firstTab = islandLeft + IslandLayout.expandedContentInset
+        let tab = CGPoint(x: firstTab + 2 * step + 3, y: canvas.height - notch.size.height / 2)
+        click(panel, at: tab, count: 1)
         try await Task.sleep(for: .milliseconds(100))
         #expect(model.selectedTab == keepAwake.id)
         #expect(model.presentation == .expanded)
 
         // Between the tabs and the notch, the click reaches the island itself, which closes.
-        let besideTabs = CGPoint(x: secondTab + IslandLayout.tabButtonSize.width + 12, y: tab.y)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            panel.sendEvent(mouseEvent(type, at: besideTabs, in: panel))
-        }
+        let besideTabs = CGPoint(x: firstTab + CGFloat(count) * step + 2, y: tab.y)
+        click(panel, at: besideTabs, count: 1)
         try await Task.sleep(for: .milliseconds(100))
         #expect(model.presentation != .expanded)
+    }
+
+    @Test func aClickOnAHomeCardOpensItsTabAndLeavesTheIslandOpen() async throws {
+        let (home, _, keepAwake) = registerJambulsActivities()
+        let model = IslandModel(notch: notch, activities: activities, presentation: .expanded)
+        #expect(model.selectedTab == home.id)
+        let panel = try await openPanel(on: model)
+        defer { panel.orderOut(nil) }
+
+        // Keep Awake's card, the second of four.
+        click(panel, at: cardPoint(1, of: 4), count: 1)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.selectedTab == keepAwake.id)
+        #expect(model.presentation == .expanded)
+    }
+
+    /// The first click on a card opens its tab, which takes the card's place, so the rest of a double click would land
+    /// on the tab. With two cards, as on a Mac without a battery and with no subscription on, Keep Awake's Turn On lies
+    /// under its card, and the rest of the click turned it on. With four, nothing of the tab's lies there; the island
+    /// stays open on the tab either way.
+    @Test(arguments: [true, false])
+    func theRestOfADoubleClickOnAHomeCardLeavesItsTabAsItIs(everyCard: Bool) async throws {
+        let (_, _, keepAwake) = registerJambulsActivities(everyCard: everyCard)
+        let model = IslandModel(notch: notch, activities: activities, presentation: .expanded)
+        let panel = try await openPanel(on: model)
+        defer { panel.orderOut(nil) }
+
+        let card = cardPoint(1, of: everyCard ? 4 : 2)
+        click(panel, at: card, count: 1)
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(model.selectedTab == keepAwake.id)
+        // Within a 0.5 s double-click interval.
+        click(panel, at: card, count: 2)
+        try await Task.sleep(for: .milliseconds(450))
+        #expect(model.presentation == .expanded, "the rest of the double click closed the island")
+        #expect(!keepAwake.isOn, "the rest of the double click turned Keep Awake on")
     }
 
     // MARK: Double clicks on a tab's controls
 
     @Test func theRestOfADoubleClickOnKeepAwakesStopLeavesItOff() async throws {
-        let (_, keepAwake) = registerTabs()
+        let (_, _, keepAwake) = registerJambulsActivities()
         keepAwake.start()
         let model = IslandModel(notch: notch, activities: activities, presentation: .expanded)
+        model.selectTab(keepAwake.id)
         #expect(model.selectedTab == keepAwake.id)
         let panel = try await openPanel(on: model)
         defer { panel.orderOut(nil) }
@@ -127,9 +194,10 @@ final class OpenIslandTests {
     }
 
     @Test func theRestOfADoubleClickOnTheTimersStopLeavesItStopped() async throws {
-        let (timer, _) = registerTabs()
+        let (_, timer, _) = registerJambulsActivities()
         timer.start(.seconds(300))
         let model = IslandModel(notch: notch, activities: activities, presentation: .expanded)
+        model.selectTab(timer.id)
         #expect(model.selectedTab == timer.id)
         let panel = try await openPanel(on: model)
         defer { panel.orderOut(nil) }
@@ -159,9 +227,14 @@ final class OpenIslandTests {
     private var stopButton: CGPoint {
         let canvas = IslandLayout.canvasSize(notch)
         let right = (canvas.width + IslandLayout.expandedSize.width) / 2 - IslandLayout.expandedContentInset
+        return CGPoint(x: right - IslandButtonStyle.height / 2, y: contentMiddle)
+    }
+
+    /// The height, in the panel, halfway down the room below the notch, where a tab's row is centered.
+    private var contentMiddle: CGFloat {
         let top = notch.size.height + IslandLayout.expandedContentTopGap
         let bottom = IslandLayout.expandedSize.height - IslandLayout.expandedContentBottomInset
-        return CGPoint(x: right - IslandButtonStyle.height / 2, y: canvas.height - (top + bottom) / 2)
+        return IslandLayout.canvasSize(notch).height - (top + bottom) / 2
     }
 
     private func click(_ panel: IslandPanel, at point: CGPoint, count: Int) {

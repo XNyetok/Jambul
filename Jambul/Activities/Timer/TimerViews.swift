@@ -37,6 +37,25 @@ extension TimerActivity {
         .foregroundStyle(.white)
     }
 
+    /// Its card on Home: the time left in its color, ticking like the countdown beside the notch, or "Off".
+    var homeCard: some View {
+        HomeCardContent(state.isPaused ? Text("Paused") : Text("Timer")) {
+            Image(systemName: tabSymbol)
+                .foregroundStyle(state == .idle ? AnyShapeStyle(.secondary) : AnyShapeStyle(tint))
+        } value: {
+            if state == .idle {
+                Text("Off")
+                    .foregroundStyle(.secondary)
+            } else {
+                TimerTicks(timer: self) { remaining, _ in
+                    Text(Self.format(remaining))
+                }
+                .foregroundStyle(tint)
+                .opacity(state.isPaused ? Self.pausedOpacity : 1)
+            }
+        }
+    }
+
     /// "4:59", or "1:02:03" from an hour up, like the system's own timer text. Seconds round up as they do there, so
     /// the display reaches 0:00 just as the time is up.
     static func format(_ remaining: TimeInterval, locale: Locale = .autoupdatingCurrent) -> String {

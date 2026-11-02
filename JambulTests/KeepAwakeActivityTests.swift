@@ -277,7 +277,7 @@ final class KeepAwakeActivityTests {
         try await Task.sleep(for: .milliseconds(50))
         let content = try #require(window.contentView)
 
-        // Off, as the island mostly opens on it: the laptop with its code, where an eye shut to a flat line stood.
+        // Off, as its tab is mostly seen: the laptop with its code, where an eye shut to a flat line stood.
         #expect(views(EyeView.self, in: content).isEmpty)
         let laptop = try #require(views(LaptopView.self, in: content).first)
         #expect(views(LaptopView.self, in: content) == [laptop])

@@ -60,25 +60,47 @@ extension KeepAwakeActivity {
         .foregroundStyle(.white)
     }
 
+    /// Its card on Home: how long it has been on, in its color, or "Off".
+    var homeCard: some View {
+        HomeCardContent(Text("Keep Awake")) {
+            Image(systemName: tabSymbol)
+                .foregroundStyle(isOn ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
+        } value: {
+            if isOn, let since {
+                KeepAwakeSince(since: since, isShort: true)
+                    .foregroundStyle(tint)
+            } else {
+                Text("Off")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     /// Turned on a moment ago, so the eye opens and the laptop types as they appear, rather than appearing as they are.
     private var justTurnedOn: Bool {
         since.map { Date.now.timeIntervalSince($0) < 1 } ?? false
     }
 }
 
-/// When Keep Awake was turned on (`KeepAwakeActivity.sinceLine`), redrawn as each minute of it passes, and only while
-/// someone can see the island.
+/// When Keep Awake was turned on and for how long (`KeepAwakeActivity.sinceLine`), or only for how long
+/// (`KeepAwakeActivity.onFor`), redrawn as each minute of it passes, and only while someone can see the island.
 struct KeepAwakeSince: View {
     let since: Date
+    /// Only how long, for its card on Home, which has no room for when.
+    var isShort = false
     @Environment(\.islandIsVisible) private var isVisible
 
     var body: some View {
         if isVisible {
             TimelineView(.periodic(from: since, by: 60)) { context in
-                Text(KeepAwakeActivity.sinceLine(since: since, at: context.date))
+                Text(line(at: context.date))
             }
         } else {
-            Text(KeepAwakeActivity.sinceLine(since: since, at: .now))
+            Text(line(at: .now))
         }
+    }
+
+    private func line(at date: Date) -> String {
+        isShort ? KeepAwakeActivity.onFor(since: since, at: date) : KeepAwakeActivity.sinceLine(since: since, at: date)
     }
 }

@@ -8,9 +8,9 @@ import Testing
 struct IslandModelTests {
     private let activities = ActivityCenter()
 
-    private func makeModel(on center: ActivityCenter? = nil, defaults: UserDefaults? = nil) -> IslandModel {
+    private func makeModel(on center: ActivityCenter? = nil) -> IslandModel {
         IslandModel(notch: NotchMetrics(size: CGSize(width: 180, height: 32), compactHeight: 33),
-                    activities: center ?? activities, defaults: defaults)
+                    activities: center ?? activities)
     }
 
     @Test func hoveringTheNotchLiftsThenExpands() async throws {
@@ -352,11 +352,12 @@ struct IslandModelTests {
         model.pointer(.island, isInside: true)
         model.clicked()
         #expect(model.selectedTab == first.id)
-        // Like the timer ending on its own tab: the owner saw it there.
+        // Like the timer ending on its own tab: the owner saw it there, then looked at the other tab.
         activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Done", duration: .milliseconds(300),
                              mustBeSeen: true, source: first.id))
         first.isLive = false
         try await Task.sleep(for: .milliseconds(50))
+        model.selectTab(second.id)
 
         // Clicked closed and open again within the news's own time, now on the other tab.
         model.clicked()
@@ -476,155 +477,80 @@ struct IslandModelTests {
         #expect(makeModel().tabs.map(\.id) == [first.id, second.id])
     }
 
-    @Test func withNothingLiveTheIslandFirstOpensOnTheFirstTab() {
-        let (first, _, _) = registerTabbedActivities()
-        let model = makeModel()
-        model.clicked()
-        #expect(model.selectedTab == first.id)
-    }
-
-    @Test func theIslandOpensOnTheMostImportantLiveActivitysTab() async throws {
+    @Test func theIslandFirstOpensOnTheFirstTabEvenWithSomethingLive() {
         let (first, second, _) = registerTabbedActivities()
+        // Like Keep Awake coming back on as Jambul relaunches: the island still opens on Home, the first tab.
         second.isLive = true
         let model = makeModel()
         model.clicked()
-        #expect(model.selectedTab == second.id)
-
-        model.clicked()
-        first.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        model.clicked()
         #expect(model.selectedTab == first.id)
     }
 
-    @Test func withNothingLiveTheIslandOpensOnTheTabOfWhatStartedLast() async throws {
+    @Test func theIslandHoversOpenAgainOnTheTabItShowedLast() async throws {
         let (_, second, _) = registerTabbedActivities()
         let model = makeModel()
-        // Started with the island shut, as Keep Awake can be from the menu bar, and over by the time it opens.
-        second.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        second.isLive = false
-        try await Task.sleep(for: .milliseconds(50))
-        model.clicked()
-        #expect(model.selectedTab == second.id)
-    }
-
-    @Test func aTabTheOwnerOnlyLookedAtIsntWhereTheIslandOpensNext() async throws {
-        let (first, second, _) = registerTabbedActivities()
-        let model = makeModel()
-        second.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        second.isLive = false
-        try await Task.sleep(for: .milliseconds(50))
-        // A glance at the other tab, starting nothing there. When a click alone chose the tab, this sent the next
-        // opening to the timer's tab of someone who had come to turn Keep Awake on.
-        model.clicked()
-        model.selectTab(first.id)
-        model.clicked()
-        #expect(model.presentation == .idle)
-        model.clicked()
-        #expect(model.selectedTab == second.id)
-    }
-
-    @Test func somethingStartedOnItsTabInTheOpenIslandIsWhereItOpensNext() async throws {
-        let (first, second, _) = registerTabbedActivities()
-        let model = makeModel()
-        model.clicked()
-        #expect(model.selectedTab == first.id)
-        // A common path: Keep Awake's tab, its Turn On, then a look back at the timer's tab before closing.
-        model.selectTab(second.id)
-        second.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
+        model.pointer(.notch, isInside: true)
+        try await Task.sleep(for: .milliseconds(250))
         #expect(model.presentation == .expanded)
-        model.selectTab(first.id)
-        second.isLive = false
-        try await Task.sleep(for: .milliseconds(50))
+        model.selectTab(second.id)
+
+        // Closed by the pointer leaving, then hovered open again.
+        model.pointer(.notch, isInside: false)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(model.presentation == .idle)
+        model.pointer(.notch, isInside: true)
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(model.presentation == .expanded)
+        #expect(model.selectedTab == second.id)
+    }
+
+    @Test func aTabTheOwnerOnlyLookedAtIsWhereTheIslandOpensNext() {
+        let (_, second, _) = registerTabbedActivities()
+        let model = makeModel()
+        // A look at the usage limits, starting nothing there, then a click to close and one to open again.
+        model.clicked()
+        model.selectTab(second.id)
         model.clicked()
         #expect(model.presentation == .idle)
         model.clicked()
         #expect(model.selectedTab == second.id)
     }
 
-    @Test func whatIsLiveAsJambulLaunchesDoesntCountAsJustStarted() async throws {
-        let suiteName = "JambulTests.IslandModel.LiveAtLaunch"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-        // Keep Awake on, then a timer started after it.
-        let (first, second, _) = registerTabbedActivities()
-        let before = makeModel(defaults: defaults)
-        second.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        first.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(before.liveActivities.count == 2)
-
-        // A build relaunches Jambul: Keep Awake comes back on, the timer doesn't. Once Keep Awake is off, the timer is
-        // still what started last.
-        let relaunched = ActivityCenter()
-        relaunched.register(TabbedTestActivity(id: "first", priority: .high))
-        let keptOn = TabbedTestActivity(id: "second", isLive: true)
-        relaunched.register(keptOn)
-        let model = makeModel(on: relaunched, defaults: defaults)
-        keptOn.isLive = false
-        try await Task.sleep(for: .milliseconds(50))
-        model.clicked()
-        #expect(model.selectedTab == "first")
-    }
-
-    @Test func theTabOfWhatStartedLastOutlastsARelaunch() async throws {
-        let suiteName = "JambulTests.IslandModel"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-        let (_, second, _) = registerTabbedActivities()
-        let before = makeModel(defaults: defaults)
-        second.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        second.isLive = false
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(before.liveActivities.isEmpty)
-
-        // Jambul launched again: its activities registered anew, none of them live, and a new island.
-        let relaunched = ActivityCenter()
-        relaunched.register(TabbedTestActivity(id: "first", priority: .high))
-        relaunched.register(TabbedTestActivity(id: "second"))
-        let model = makeModel(on: relaunched, defaults: defaults)
-        model.clicked()
-        #expect(model.selectedTab == "second")
-    }
-
-    @Test func anActivityWithoutATabStartingLeavesTheOpeningTabAlone() async throws {
-        let (_, second, other) = registerTabbedActivities()
+    @Test func activitiesStartingAndEndingDontMoveTheTab() async throws {
+        let (first, second, other) = registerTabbedActivities()
         let model = makeModel()
-        second.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        second.isLive = false
-        // Like the debug menu's demo, which has no tab.
+        model.clicked()
+        model.selectTab(second.id)
+        model.clicked()
+        // With the island shut: the more important one starting, as the timer can from the menu bar, and one without a
+        // tab, like the debug menu's demo.
+        first.isLive = true
         other.isLive = true
         try await Task.sleep(for: .milliseconds(50))
         model.clicked()
         #expect(model.selectedTab == second.id)
-    }
-
-    @Test func aLiveActivityOutranksTheTabOfWhatStartedLastUntilItEnds() async throws {
-        let (first, second, _) = registerTabbedActivities()
-        let model = makeModel()
-        first.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        // Started after the first, and over again while the first stays live.
-        second.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        second.isLive = false
-        try await Task.sleep(for: .milliseconds(50))
-        model.clicked()
-        #expect(model.selectedTab == first.id)
 
         model.clicked()
         first.isLive = false
         try await Task.sleep(for: .milliseconds(50))
         model.clicked()
         #expect(model.selectedTab == second.id)
+    }
+
+    @Test func aNewIslandStartsOnTheFirstTabAgain() {
+        let (_, second, _) = registerTabbedActivities()
+        let before = makeModel()
+        before.clicked()
+        before.selectTab(second.id)
+        #expect(before.selectedTab == second.id)
+
+        // Jambul launched again: its activities registered anew, and a new island, which opens on Home again.
+        let relaunched = ActivityCenter()
+        relaunched.register(TabbedTestActivity(id: "first", priority: .high))
+        relaunched.register(TabbedTestActivity(id: "second"))
+        let model = makeModel(on: relaunched)
+        model.clicked()
+        #expect(model.selectedTab == "first")
     }
 
     @Test func theTabStaysPutWhileActivitiesStartAndEnd() async throws {

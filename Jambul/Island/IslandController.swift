@@ -27,7 +27,9 @@ final class IslandController: NSObject {
         self.screen = screen
         geometry = NotchGeometry(screen: screen)
         self.preferences = preferences
-        model = IslandModel(notch: geometry.metrics, activities: activities, defaults: .standard)
+        model = IslandModel(notch: geometry.metrics, activities: activities)
+        // Jambul 0.1 kept the tab of what started last here, to open on it; the island now opens on the tab it showed.
+        UserDefaults.standard.removeObject(forKey: "lastStartedTab")
         islandPanel = IslandPanel(contentRect: .zero)
         hotZonePanel = IslandPanel(contentRect: .zero, levelOffset: 4)
         super.init()

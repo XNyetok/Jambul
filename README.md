@@ -11,7 +11,7 @@ Jambul turns the notch into a living island. Hover over it to open it, move away
 - **Keep Awake:** keeps the display on until you turn it off, for long downloads, builds or coding agents. A blinking eye and a typing laptop show it's on. It turns itself off at 20% battery.
 - **Battery:** peeks when the charger is plugged in or out and when the battery is full, plus low-battery warnings at 20% and 5% that wait until you can see them.
 - **Usage limits:** how much of your Claude, Antigravity and Codex limits you've used and when they start over, each with its own logo. Peeks warn at 80% and 95%, the island stays beside the notch from 95% until the limit resets, and a peek tells you when it's back. Each subscription can be turned on or off in Settings; Codex starts off.
-- **Tabs:** the open island shows one feature at a time, and opens on whatever is running or what you started last.
+- **Home and tabs:** the open island shows one feature at a time. As Jambul starts it opens on Home, with a card for the timer, Keep Awake, the battery and your usage limits; click the timer, Keep Awake or usage card to open its tab. After that it opens on the tab you looked at last.
 - **Full screen friendly:** the island never covers a full-screen app, and shows the day and time while the menu bar is hidden. It can also hide completely in full screen.
 - **Settings:** open at login, hover speed, haptic taps, the timer's sound, and which usage limits to show. Reduce Motion is respected.
 
