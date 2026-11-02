@@ -4,15 +4,16 @@ import SwiftUI
 
 /// Owns the island's windows and keeps them on the notch.
 ///
-/// Two panels split the pointer work: a notch-sized hot zone that is always listening, and a larger
-/// island panel that only catches the pointer while the island is out. When idle, nothing outside
-/// the notch blocks clicks.
+/// Two panels split the pointer work: a notch-sized hot zone that is always listening, and the island panel, which
+/// only catches the pointer while the island is out, and only where the island is once it rests (`IslandPanelFitter`).
+/// So nothing outside the notch blocks clicks while the island is idle, and nothing outside the island once it rests.
 @MainActor
 final class IslandController: NSObject {
     private let model: IslandModel
     private let preferences: Preferences
     private let spaces = SpaceInspector()
     private let islandPanel: IslandPanel
+    private let islandFit: IslandPanelFitter
     private let hotZonePanel: IslandPanel
     private let hotZone = NotchHotZoneView()
     private var screen: NSScreen
@@ -31,13 +32,11 @@ final class IslandController: NSObject {
         // Jambul 0.1 kept the tab of what started last here, to open on it; the island now opens on the tab it showed.
         UserDefaults.standard.removeObject(forKey: "lastStartedTab")
         islandPanel = IslandPanel(contentRect: .zero)
-        hotZonePanel = IslandPanel(contentRect: .zero, levelOffset: 4)
-        super.init()
-
         let host = NSHostingView(rootView: IslandView(model: model))
         host.sizingOptions = []
-        islandPanel.contentView = host
-        islandPanel.ignoresMouseEvents = true
+        islandFit = IslandPanelFitter(panel: islandPanel, content: host, model: model, geometry: geometry)
+        hotZonePanel = IslandPanel(contentRect: .zero, levelOffset: 4)
+        super.init()
 
         hotZone.drawsNotch = geometry.hasPhysicalNotch
         hotZone.onHoverChange = { [weak model] in model?.pointer(.notch, isInside: $0) }
@@ -80,7 +79,6 @@ final class IslandController: NSObject {
     }
 
     private func presentationWillChange(from previous: IslandPresentation, to next: IslandPresentation) {
-        islandPanel.ignoresMouseEvents = next == .idle
         if isHidden { followWhileHidden(isOut: next != .idle && next != .compact) }
         // Tap as the pointer reaches the notch: a finger is on the trackpad then, and haptics are only felt through
         // a resting finger. By the time the island opens it has often lifted.
@@ -150,7 +148,7 @@ final class IslandController: NSObject {
     }
 
     private func pointerIsOnIsland() -> Bool {
-        model.layout.frame(hangingFrom: islandPanel.frame).contains(NSEvent.mouseLocation)
+        islandFit.isPointerOnIsland
     }
 
     /// Follows the pointer for the model while hover waits for it to leave a peek it never came for: at most the
@@ -201,7 +199,7 @@ final class IslandController: NSObject {
     }
 
     private func layoutPanels() {
-        islandPanel.setFrame(geometry.panelFrame(size: IslandLayout.canvasSize(geometry.metrics)), display: true)
+        islandFit.layOut(on: geometry)
         let hotZoneFrame = geometry.hotZoneFrame
         hotZonePanel.setFrame(hotZoneFrame, display: true)
         hotZone.notchFrame = geometry.notchRect.offsetBy(dx: -hotZoneFrame.minX, dy: -hotZoneFrame.minY)

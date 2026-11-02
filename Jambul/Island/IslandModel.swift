@@ -20,8 +20,8 @@ enum PointerRegion: Hashable {
     case notch, island
 }
 
-/// The island's state machine. Views are a pure function of it; the window controller only
-/// follows along through `onPresentationChange`.
+/// The island's state machine. Views are a pure function of it; its windows only follow along, through
+/// `onPresentationChange` and `onWillChange`.
 ///
 /// Hovering opens the island after a short intent delay and leaving closes it. A click toggles it: opening skips
 /// the intent delay, and closing folds it back to the lifted pill while the pointer stays, so it never vanishes
@@ -58,6 +58,11 @@ final class IslandModel {
 
     /// Called right before the presentation changes, so the window can prepare for it.
     @ObservationIgnored var onPresentationChange: (@MainActor (_ from: IslandPresentation, _ to: IslandPresentation) -> Void)?
+    /// Called right before the model moves or resizes the island, with the presentation it will have, before any of the
+    /// change is stored: the island's panel makes room for the motion first (`IslandPanelFitter`). Changes from outside
+    /// the model, like the screen's notch or an activity's own slot width, don't come through here, and neither does a
+    /// tab changing in the open island, which keeps its size.
+    @ObservationIgnored var onWillChange: (@MainActor (_ next: IslandPresentation) -> Void)?
     /// How long the pointer has to rest on the notch before the island opens.
     @ObservationIgnored var hoverIntent = HoverSpeed.normal.intent
     /// Whether anyone can see the island right now: not while the display sleeps or the screen is locked. Asked as
@@ -459,6 +464,7 @@ final class IslandModel {
                 """)
             onPresentationChange?(presentation, next)
         }
+        onWillChange?(next)
         let opening = next == .expanded && presentation != .expanded
         withAnimation(Motion.animation(from: presentation, to: next)) {
             // At rest or open, the island no longer keeps room for the pointer.

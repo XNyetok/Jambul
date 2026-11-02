@@ -65,3 +65,12 @@ struct NotchGeometry: Equatable {
         NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.main
     }
 }
+
+extension CGRect {
+    /// Whether a pointer at `location`, in screen points, is on this rect as AppKit counts it: the top edge in, the bottom
+    /// edge out. A pointer pushed against the top of the screen is at the screen's `maxY`, which `contains` leaves out of
+    /// every frame hanging from there, the island's among them.
+    func containsPointer(at location: CGPoint) -> Bool {
+        NSMouseInRect(location, self, false)
+    }
+}

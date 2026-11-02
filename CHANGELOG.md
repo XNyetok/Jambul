@@ -7,6 +7,10 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 ### Changed
 - The tabs go Home, Usage, Keep Awake and Timer, and Home's cards follow the same order, with the battery's last.
 
+### Fixed
+- Clicks below and beside the island reach the apps there while something rests beside the notch, such as a usage limit at 95% or a running timer. The island's window took them across an area about 528 × 174 points around the notch, though nothing of the island was drawn there.
+- When Jambul starts with something already beside the notch, such as Keep Awake back on or a usage limit at 95%, hovering or clicking the island beside the notch works right away. Before, only the notch itself responded until the island first changed.
+
 ## [0.2.0] - 2026-11-02
 Usage limits for your AI subscriptions, and Home.
 
