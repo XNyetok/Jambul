@@ -461,7 +461,7 @@ struct IslandModelTests {
 
     // MARK: Tabs
 
-    /// Two activities with a tab, like the timer and Keep Awake, the first the more important, and one without.
+    /// Two activities with a tab, the first the more important, and one without.
     private func registerTabbedActivities() -> (first: TabbedTestActivity, second: TabbedTestActivity, other: TestActivity) {
         let first = TabbedTestActivity(id: "first", priority: .high)
         let other = TestActivity(id: "other")

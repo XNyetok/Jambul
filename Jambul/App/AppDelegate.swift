@@ -42,12 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let keepAwake = KeepAwakeActivity(activities: activities)
         self.keepAwake = keepAwake
-        // First, so Home is the first tab, where the island opens as Jambul starts.
-        activities.register(home)
-        activities.register(timer)
-        activities.register(keepAwake)
-        activities.register(battery)
-        activities.register(usage)
+        activities.registerJambulsActivities(home: home, usage: usage, keepAwake: keepAwake, timer: timer,
+                                             battery: battery)
         #if DEBUG
         activities.register(demo)
         #endif
@@ -266,5 +262,17 @@ extension AppDelegate: NSMenuItemValidation {
             item.state = keepAwake?.isOn == true ? .on : .off
         }
         return true
+    }
+}
+
+extension ActivityCenter {
+    /// Registers Jambul's own activities, for the app, its previews and its tests alike. The order they register in is
+    /// the order of the open island's tabs and of the cards on Home: Home first, where the island opens as Jambul
+    /// starts, then the usage limits, Keep Awake and the timer. The battery has no tab, so its card comes last on Home.
+    /// Between live activities of the same priority, the one registered first also takes the right beside the notch.
+    func registerJambulsActivities(home: HomeActivity, usage: UsageActivity, keepAwake: KeepAwakeActivity,
+                                   timer: TimerActivity, battery: BatteryActivity) {
+        let inOrder: [any IslandActivity] = [home, usage, keepAwake, timer, battery]
+        for activity in inOrder { register(activity) }
     }
 }

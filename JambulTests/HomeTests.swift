@@ -42,17 +42,18 @@ final class HomeTests {
         let keepAwake = KeepAwakeActivity(activities: activities, defaults: defaults, bootSession: nil, holdsScreen: false)
         let battery = BatteryActivity(activities: activities)
         let usage = UsageActivity(activities: activities)
-        let all: [any IslandActivity] = [home, timer, keepAwake, battery, usage]
-        for activity in all { activities.register(activity) }
+        activities.registerJambulsActivities(home: home, usage: usage, keepAwake: keepAwake, timer: timer,
+                                             battery: battery)
         var cards: [String] { activities.activities.filter(\.showsHomeCard).map(\.id) }
 
         // Before the battery's first reading, as on a Mac without one, and with every subscription turned off.
-        #expect(cards == [timer.id, keepAwake.id])
+        #expect(cards == [keepAwake.id, timer.id])
         battery.update(PowerState(percent: 76, isOnExternalPower: false))
         usage.enabled = [.claude]
-        #expect(cards == [timer.id, keepAwake.id, battery.id, usage.id])
+        // In the tabs' order, and the battery's, which has no tab, last.
+        #expect(cards == [usage.id, keepAwake.id, timer.id, battery.id])
         usage.enabled = []
-        #expect(cards == [timer.id, keepAwake.id, battery.id])
+        #expect(cards == [keepAwake.id, timer.id, battery.id])
     }
 
     /// Each subscription the owner turned on fits on the usage card, as wide as one of four beside the MacBook Air's
