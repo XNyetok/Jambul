@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-02
+Usage limits for your AI subscriptions, and Home.
+
 ### Added
 - Usage limits: a tab with how much of your Claude, Antigravity and Codex limits you've used and when they reset, with each service's logo. Peeks warn at 80% and 95%, the island stays beside the notch from 95% until the limit resets, and a peek says when it's back. Each service can be turned on or off in Settings, and Codex starts off. Claude's numbers come through Claude Code's status line, which Jambul joins only after you agree and leaves exactly as it was when you turn Claude off.
 - Home: the open island's first tab, where it opens as Jambul starts, with a card for the timer, Keep Awake, the battery and the usage limits. Click the timer, Keep Awake or usage card to open its tab. The tab buttons narrow a little so four fit beside the notch.
@@ -24,5 +27,6 @@ The first public release.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
 
-[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/XNyetok/Jambul/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/XNyetok/Jambul/releases/tag/v0.1.0
