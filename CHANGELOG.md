@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Changed
+- The tabs go Home, Usage, Keep Awake and Timer, and Home's cards follow the same order, with the battery's last.
+
 ## [0.2.0] - 2026-11-02
 Usage limits for your AI subscriptions, and Home.
 

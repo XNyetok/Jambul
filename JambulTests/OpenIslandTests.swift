@@ -18,9 +18,10 @@ final class OpenIslandTests {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    /// Jambul's activities as it registers them, none of them live: Home, the timer, Keep Awake, the battery and the
-    /// usage limits. With `everyCard`, the battery has a reading and Claude is turned on, so Home shows all four cards;
-    /// without, as on a Mac without a battery and with no subscription on, only the timer's and Keep Awake's.
+    /// Jambul's activities as it registers them, none of them live: Home, the usage limits, Keep Awake, the timer and
+    /// the battery. With `everyCard`, the battery has a reading and Claude is turned on, so Home shows all four cards;
+    /// without, as on a Mac without a battery and with no subscription on, only Keep Awake's and the timer's.
+    @discardableResult
     private func registerJambulsActivities(everyCard: Bool = true)
         -> (home: HomeActivity, timer: TimerActivity, keepAwake: KeepAwakeActivity) {
         let home = HomeActivity(activities: activities)
@@ -28,8 +29,8 @@ final class OpenIslandTests {
         let keepAwake = KeepAwakeActivity(activities: activities, defaults: defaults, bootSession: nil, holdsScreen: false)
         let battery = BatteryActivity(activities: activities)
         let usage = UsageActivity(activities: activities)
-        let all: [any IslandActivity] = [home, timer, keepAwake, battery, usage]
-        for activity in all { activities.register(activity) }
+        activities.registerJambulsActivities(home: home, usage: usage, keepAwake: keepAwake, timer: timer,
+                                             battery: battery)
         if everyCard {
             battery.update(PowerState(percent: 76, isOnExternalPower: false))
             usage.enabled = [.claude]
@@ -64,6 +65,13 @@ final class OpenIslandTests {
         let room = IslandLayout.besideNotchRoom(notch)
         #expect(bar.width <= room, "\(tabs.count) tabs are \(bar.width) pt wide, with room for \(room)")
         #expect(bar.height <= notch.size.height)
+    }
+
+    /// The tabs beside the notch go Home, the usage limits, Keep Awake and the timer.
+    @Test func theTabsGoHomeUsageKeepAwakeAndTheTimer() {
+        registerJambulsActivities()
+        let model = IslandModel(notch: notch, activities: activities)
+        #expect(model.tabs.map(\.id) == ["home", "usage", "keepAwake", "timer"])
     }
 
     /// Beside the MacBook Air's notch, three tabs keep their full width and four narrow to fit, so the island keeps its
@@ -151,25 +159,27 @@ final class OpenIslandTests {
     }
 
     /// The first click on a card opens its tab, which takes the card's place, so the rest of a double click would land
-    /// on the tab. With two cards, as on a Mac without a battery and with no subscription on, Keep Awake's Turn On lies
-    /// under its card, and the rest of the click turned it on. With four, nothing of the tab's lies there; the island
-    /// stays open on the tab either way.
+    /// on the tab. The timer's quick starts lie under its card, with four cards as with two (as on a Mac without a
+    /// battery and with no subscription on), and the rest of the click would start a timer. The island stays open on
+    /// the tab either way.
     @Test(arguments: [true, false])
     func theRestOfADoubleClickOnAHomeCardLeavesItsTabAsItIs(everyCard: Bool) async throws {
-        let (_, _, keepAwake) = registerJambulsActivities(everyCard: everyCard)
+        let (_, timer, _) = registerJambulsActivities(everyCard: everyCard)
         let model = IslandModel(notch: notch, activities: activities, presentation: .expanded)
         let panel = try await openPanel(on: model)
         defer { panel.orderOut(nil) }
 
-        let card = cardPoint(1, of: everyCard ? 4 : 2)
+        // The timer's card, the third of four or the second of two.
+        let card = everyCard ? cardPoint(2, of: 4) : cardPoint(1, of: 2)
         click(panel, at: card, count: 1)
         try await Task.sleep(for: .milliseconds(120))
-        #expect(model.selectedTab == keepAwake.id)
+        #expect(model.selectedTab == timer.id)
         // Within a 0.5 s double-click interval.
         click(panel, at: card, count: 2)
         try await Task.sleep(for: .milliseconds(450))
         #expect(model.presentation == .expanded, "the rest of the double click closed the island")
-        #expect(!keepAwake.isOn, "the rest of the double click turned Keep Awake on")
+        #expect(timer.state == .idle, "the rest of the double click started a timer")
+        timer.stop()
     }
 
     // MARK: Double clicks on a tab's controls

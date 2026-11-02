@@ -94,8 +94,7 @@ private func previewActivities(timer running: Bool = false, keepAwake on: Bool =
                                       bootSession: nil, holdsScreen: false)
     let battery = BatteryActivity(activities: activities)
     let usage = UsageActivity(activities: activities)
-    let all: [any IslandActivity] = [home, timer, keepAwake, battery, usage]
-    for activity in all { activities.register(activity) }
+    activities.registerJambulsActivities(home: home, usage: usage, keepAwake: keepAwake, timer: timer, battery: battery)
     if running { timer.start(.seconds(25 * 60)) }
     if on { keepAwake.start(since: .now.addingTimeInterval(-65 * 60)) } else { keepAwake.stop() }
     battery.update(PowerState(percent: 76, isOnExternalPower: false))
