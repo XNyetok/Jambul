@@ -78,6 +78,16 @@ struct NotchGeometryTests {
         let geometry = NotchGeometry(screenFrame: frame, visibleFrame: frame, safeAreaTop: 0, leftArea: nil, rightArea: nil)
         #expect(geometry.notchRect.height == 24)
     }
+
+    /// A pointer pushed against the top of the screen reads the screen's `maxY`, so a frame hanging from the top holds it,
+    /// as AppKit counts the pointer: the top edge in, the bottom edge out.
+    @Test func aFrameHangingFromTheTopHoldsAPointerPushedAgainstIt() {
+        let island = CGRect(x: 589, y: 923, width: 292, height: 33)
+        #expect(island.containsPointer(at: CGPoint(x: 700, y: 956)))
+        #expect(!island.contains(CGPoint(x: 700, y: 956)))
+        #expect(!island.containsPointer(at: CGPoint(x: 700, y: 923)))
+        #expect(island.containsPointer(at: CGPoint(x: 700, y: 940)))
+    }
 }
 
 struct IslandLayoutTests {

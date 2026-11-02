@@ -12,7 +12,7 @@ struct IslandView: View {
         ZStack(alignment: .top) {
             shape
                 .fill(.black)
-                .shadow(color: .black.opacity(presentation == .expanded ? 0.45 : 0), radius: 16, y: 6)
+                .shadow(color: .black.opacity(layout.castsShadow ? 0.45 : 0), radius: 16, y: 6)
 
             // Clipped separately from the shadow, so content never draws outside the island while it morphs.
             ZStack(alignment: .top) {

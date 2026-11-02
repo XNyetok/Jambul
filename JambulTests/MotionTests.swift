@@ -14,4 +14,17 @@ struct MotionTests {
             #expect(lift.velocity(target: 1.0, time: opensAt) >= 0.75 * topSpeed, "\(speed) stalls before opening")
         }
     }
+
+    /// The island panel shrinks to fit the island once the island has settled. A spring still moving then would be cut
+    /// off at the panel's edge.
+    @Test func everyIslandSpringSettlesBeforeThePanelFitsTheIsland() {
+        let presentations: [IslandPresentation] = [.idle, .compact, .lifted, .peek, .expanded]
+        let settles = Motion.islandSettles / .seconds(1)
+        for from in presentations {
+            for to in presentations {
+                let spring = Motion.spring(from: from, to: to)
+                #expect(spring.settlingDuration <= settles, "\(from) → \(to) settles in \(spring.settlingDuration) s")
+            }
+        }
+    }
 }

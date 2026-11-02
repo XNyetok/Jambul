@@ -16,6 +16,11 @@ enum Motion {
     /// motion is over, so a peek that came out shrinks away rather than vanishing.
     static let returnToRest: Duration = .milliseconds(500)
 
+    /// How long the island takes to settle after any change: every spring it moves on has come to rest by then (the
+    /// slowest, the arrival lift, in 0.9 s; `MotionTests` checks). Its panel only shrinks to fit it after this, so the
+    /// panel never cuts off a spring still moving.
+    static let islandSettles: Duration = .seconds(1)
+
     /// A control inside the island sinking under the pointer and springing back.
     static let buttonPress: Animation = .spring(duration: 0.2, bounce: 0)
 
@@ -52,14 +57,18 @@ enum Motion {
     static let arrivalLift = Spring(duration: 0.55, bounce: 0)
 
     static func animation(from previous: IslandPresentation, to next: IslandPresentation) -> Animation {
-        if reduceMotion { return .easeInOut(duration: 0.18) }
+        reduceMotion ? .easeInOut(duration: 0.18) : .spring(spring(from: previous, to: next))
+    }
+
+    /// The spring the island moves on from one presentation to the next.
+    static func spring(from previous: IslandPresentation, to next: IslandPresentation) -> Spring {
         switch next {
-        case .idle: return .spring(duration: 0.35, bounce: 0)
-        case .compact: return .spring(duration: 0.4, bounce: 0.2)
+        case .idle: Spring(duration: 0.35, bounce: 0)
+        case .compact: Spring(duration: 0.4, bounce: 0.2)
         case .lifted:
             // Folding back after a click is a close, so it moves like one.
-            return previous == .expanded ? .spring(duration: 0.35, bounce: 0) : .spring(arrivalLift)
-        case .peek, .expanded: return .spring(duration: 0.45, bounce: 0.25)
+            previous == .expanded ? Spring(duration: 0.35, bounce: 0) : arrivalLift
+        case .peek, .expanded: Spring(duration: 0.45, bounce: 0.25)
         }
     }
 

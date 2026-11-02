@@ -21,6 +21,17 @@ struct IslandModelTests {
         #expect(model.presentation == .expanded)
     }
 
+    /// The island's panel makes room for a change as it hears of it. Resized while the change was being stored, it made
+    /// SwiftUI draw the island as it was and miss the change.
+    @Test func theWindowsHearOfAChangeBeforeAnyOfItIsStored() {
+        let model = makeModel()
+        var heard: [String] = []
+        model.onWillChange = { [unowned model] next in heard.append("\(model.presentation) → \(next)") }
+        model.pointer(.notch, isInside: true)
+        #expect(heard == ["idle → lifted"])
+        #expect(model.presentation == .lifted)
+    }
+
     @Test func aSlowerHoverSpeedWaitsLonger() async throws {
         let model = makeModel()
         model.hoverIntent = HoverSpeed.slow.intent
