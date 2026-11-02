@@ -22,7 +22,8 @@ final class BatteryActivity: IslandActivity {
 
     /// Weak, since the center holds its activities.
     @ObservationIgnored private weak var activities: ActivityCenter?
-    @ObservationIgnored private var last: PowerState?
+    /// The latest reading, which its card on Home shows; nil before the first, and on a Mac without a battery.
+    private(set) var reading: PowerState?
     /// The low levels announced, or already passed, since the charger was last connected.
     @ObservationIgnored private var passedLevels: Set<Int> = []
     /// Whether this charge has reached full and said so.
@@ -36,8 +37,9 @@ final class BatteryActivity: IslandActivity {
     /// next real one is still compared with the last.
     func update(_ state: PowerState?) {
         guard let state else { return }
-        defer { last = state }
-        guard let last else {
+        // Only a change is stored: most readings repeat the last, and its card would redraw for nothing.
+        defer { if reading != state { reading = state } }
+        guard let last = reading else {
             // Nothing new yet. On battery, the levels already passed don't fire later; on the charger they stay armed,
             // as plugging in would have left them.
             if !state.isOnExternalPower { passLevels(downTo: state.percent) }
@@ -65,6 +67,24 @@ final class BatteryActivity: IslandActivity {
             // After a sleep the charge can drop past both levels at once, and one warning says it all.
             passLevels(downTo: state.percent)
             announce(.low, at: state.percent)
+        }
+    }
+
+    /// Only once there is a reading: a Mac without a battery never gets one.
+    var showsHomeCard: Bool { reading != nil }
+
+    /// Its card on Home: the charge, green while plugged in and red once low on battery. It says plugged in rather than
+    /// charging, since macOS can hold the charge on the charger, and says it is charging only up to a minute late.
+    var homeCard: some View {
+        let reading = reading ?? PowerState(percent: 0, isOnExternalPower: false)
+        let color: Color? = reading.isOnExternalPower ? .green
+            : reading.percent <= (Self.lowLevels.max() ?? 0) ? .red : nil
+        HomeCardContent(reading.isOnExternalPower ? Text("Plugged in") : Text("On battery")) {
+            Image(systemName: reading.isOnExternalPower ? "battery.100.bolt" : Self.symbol(for: reading.percent))
+                .foregroundStyle(color.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.secondary))
+        } value: {
+            Text((Double(reading.percent) / 100).formatted(.percent))
+                .foregroundStyle(color.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.primary))
         }
     }
 

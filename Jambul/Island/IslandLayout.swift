@@ -29,7 +29,8 @@ struct IslandLayout {
     /// Space between the notch and the tab's content, which is centered in what is left below the notch.
     static let expandedContentTopGap: CGFloat = 6
     static let expandedContentBottomInset: CGFloat = 12
-    /// Each tab's button beside the notch, and the highlight behind the chosen one.
+    /// Each tab's button beside the notch, and the highlight behind the chosen one, as wide as it gets
+    /// (`tabButtonWidth`).
     static let tabButtonSize = CGSize(width: 30, height: 24)
     static let tabButtonSpacing: CGFloat = 2
     /// The least space between the notch and what sits beside it in the open island.
@@ -44,6 +45,15 @@ struct IslandLayout {
     /// 106.5 pt beside the MacBook Air's 179 pt notch.
     static func besideNotchRoom(_ notch: NotchMetrics) -> CGFloat {
         (expandedSize.width - notch.size.width) / 2 - expandedContentInset - besideNotchGap
+    }
+
+    /// Each tab button's width: `tabButtonSize` while the tabs fit beside the notch at that width, narrower once there
+    /// are more than fit, and on whole points. Four take 25 pt each beside the MacBook Air's notch, where 30 would need
+    /// 126 pt of the 106.5 there; the island keeps its size.
+    static func tabButtonWidth(count: Int, notch: NotchMetrics) -> CGFloat {
+        guard count > 0 else { return tabButtonSize.width }
+        let room = besideNotchRoom(notch) - CGFloat(count - 1) * tabButtonSpacing
+        return min(tabButtonSize.width, (room / CGFloat(count)).rounded(.down))
     }
 
     /// The fixed size of the window hosting the island: room for the open island and its shadow.

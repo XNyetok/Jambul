@@ -18,8 +18,6 @@ final class UsageActivity: IslandActivity {
     static let claudeWorkingFor: TimeInterval = 20
 
     let id = "usage"
-    /// Nobody starts it: it comes beside the notch on its own, so the island shouldn't keep opening on it afterwards.
-    var countsAsStarted: Bool { false }
     var title: String { String(localized: "Usage") }
     var tint: Color { .purple }
     var tabSymbol: String { "gauge.with.dots.needle.33percent" }

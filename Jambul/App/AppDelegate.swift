@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var settings = SettingsWindowController(preferences: preferences, usage: usage)
     private var island: IslandController?
     private var statusItem: NSStatusItem?
+    private lazy var home = HomeActivity(activities: activities)
     private lazy var timer = TimerActivity(activities: activities, onFinish: { [preferences] in
         Feedback.play(preferences.timerSound)
         Feedback.playTaps(preferences.hapticTaps)
@@ -41,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let keepAwake = KeepAwakeActivity(activities: activities)
         self.keepAwake = keepAwake
+        // First, so Home is the first tab, where the island opens as Jambul starts.
+        activities.register(home)
         activities.register(timer)
         activities.register(keepAwake)
         activities.register(battery)

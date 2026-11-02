@@ -82,23 +82,47 @@ private struct IslandPreview: View {
                                             presentation: .peek, peek: peek))
 }
 
-/// A center with the timer and Keep Awake, either of them on. Neither holds the Mac awake or the screen on, which they
-/// would for as long as the preview lives, and Keep Awake remembers nothing.
+/// A center with Jambul's tabs, the timer or Keep Awake on if asked, the battery with a reading, and the usage limits
+/// with two subscriptions. Neither the timer nor Keep Awake holds the Mac awake or the screen on, which they would for as
+/// long as the preview lives, and nothing is remembered.
 @MainActor
 private func previewActivities(timer running: Bool = false, keepAwake on: Bool = false) -> ActivityCenter {
     let activities = ActivityCenter()
+    let home = HomeActivity(activities: activities)
     let timer = TimerActivity(activities: activities, keepsMacAwake: false)
     let keepAwake = KeepAwakeActivity(activities: activities, defaults: UserDefaults(suiteName: "preview") ?? .standard,
                                       bootSession: nil, holdsScreen: false)
-    activities.register(timer)
-    activities.register(keepAwake)
+    let battery = BatteryActivity(activities: activities)
+    let usage = UsageActivity(activities: activities)
+    let all: [any IslandActivity] = [home, timer, keepAwake, battery, usage]
+    for activity in all { activities.register(activity) }
     if running { timer.start(.seconds(25 * 60)) }
     if on { keepAwake.start(since: .now.addingTimeInterval(-65 * 60)) } else { keepAwake.stop() }
+    battery.update(PowerState(percent: 76, isOnExternalPower: false))
+    usage.enabled = [.claude, .antigravity]
+    let resets = Date.now.addingTimeInterval(3 * 3_600)
+    usage.record(UsageReading(provider: .claude, windows: [UsageWindow(id: "five_hour", label: "5h", used: 0.42,
+                                                                       resetsAt: resets)], measuredAt: .now))
+    usage.record(UsageReading(provider: .antigravity, windows: [UsageWindow(id: "weekly", label: "wk", used: 0.18,
+                                                                            resetsAt: resets)], measuredAt: .now))
     return activities
 }
 
+/// The island open on the tab with this id, as a click on it leaves it.
+@MainActor
+private func openIsland(on tab: String, _ activities: ActivityCenter) -> IslandModel {
+    let model = IslandModel(notch: previewNotch, activities: activities, presentation: .expanded)
+    model.selectTab(tab)
+    return model
+}
+
+#Preview("Home") {
+    IslandPreview(model: IslandModel(notch: previewNotch, activities: previewActivities(keepAwake: true),
+                                     presentation: .expanded))
+}
+
 #Preview("Timer Tab") {
-    IslandPreview(model: IslandModel(notch: previewNotch, activities: previewActivities(), presentation: .expanded))
+    IslandPreview(model: openIsland(on: "timer", previewActivities()))
 }
 
 #Preview("Timer") {
@@ -106,8 +130,7 @@ private func previewActivities(timer running: Bool = false, keepAwake on: Bool =
 }
 
 #Preview("Timer Expanded") {
-    IslandPreview(model: IslandModel(notch: previewNotch, activities: previewActivities(timer: true),
-                                     presentation: .expanded))
+    IslandPreview(model: openIsland(on: "timer", previewActivities(timer: true)))
 }
 
 #Preview("Keep Awake") {
@@ -115,8 +138,7 @@ private func previewActivities(timer running: Bool = false, keepAwake on: Bool =
 }
 
 #Preview("Keep Awake Expanded") {
-    IslandPreview(model: IslandModel(notch: previewNotch, activities: previewActivities(keepAwake: true),
-                                     presentation: .expanded))
+    IslandPreview(model: openIsland(on: "keepAwake", previewActivities(keepAwake: true)))
 }
 
 #Preview("Timer and Keep Awake") {

@@ -14,17 +14,18 @@ Jambul is a background app (no Dock icon) that draws a Dynamic Island–style is
 Hover opens the island after a short intent delay, leaving closes it, and a click toggles it. Closing by click folds the island back to its lifted pill while the pointer stays, and hover leaves it closed until the pointer goes away. The island never vanishes from under a resting pointer, and a click always visibly does something. There are no swipe gestures: they stalled once the island shrank away from the pointer.
 
 ## Activities
-- Features are `IslandActivity` conformers in `Activities/`, registered with `ActivityCenter` in `AppDelegate`. Today these are the timer, Keep Awake, the battery and the usage limits, plus a demo activity in debug builds.
+- Features are `IslandActivity` conformers in `Activities/`, registered with `ActivityCenter` in `AppDelegate`. Today these are Home, the timer, Keep Awake, the battery and the usage limits, plus a demo activity in debug builds.
 - The two most important live activities share the compact island; the second shows only its `compactMinimal` glyph, on the left.
-- The open island shows one activity's `tab` at a time, with the tabs beside the notch on the left. An activity without one, like the battery or the debug demo, gets no tab.
-- The island opens on the most important live activity's tab. With no live activity that has a tab, it opens on the tab of the activity started last, whether it was started from its tab or from anywhere else, such as the menu bar; this choice is remembered across launches. A tab someone only looked at doesn't count, and only a click changes the tab while the island is open.
+- The open island shows one activity's `tab` at a time, with the tabs beside the notch on the left. An activity without one, like the battery or the debug demo, gets no tab. With more tabs than fit there at full width, each narrows to fit, and the island keeps its size (`IslandLayout.tabButtonWidth`).
+- Home (`HomeActivity`), registered first, is the first tab: one card for each activity with a `homeCard`, laid out by `HomeCardContent`. A click on a card opens that activity's tab. An activity can keep its card off Home while it has nothing to say (`showsHomeCard`), like the battery before its first reading.
+- The island first opens on Home, and from then on on the tab it showed last. Only a click changes the tab, on a tab or on a card on Home; activities starting, running or ending leave it where it is, since what's live already shows beside the notch. Nothing is remembered across launches, so each launch starts on Home.
 - Each activity has a `tint` for its glyphs, tab and buttons.
 - While a full-screen app hides the menu bar, the open island shows the day and time beside the notch on the right.
 
 ## Peeks
 - Activities post short messages as a `Peek` through `ActivityCenter`.
 - A peek that arrives while the island is open, or while a hover is about to open it, waits and shows as the island closes (after a click-close, once the pointer leaves), if it is still fresh by then.
-- Must-see news about something the island doesn't show (when open, anything but the chosen tab) waits however long the island stays open.
+- Must-see news about something the island doesn't show (when open, anything but the chosen tab) waits however long the island stays open. Home's cards don't count as showing it: they don't say what happened.
 - A peek marked `mustBeSeen` ("Timer done", low battery) also waits while nobody can see the island (display asleep, screen locked), and comes out even while the island is hidden for a full-screen app. Other peeks are dropped then.
 - Waiting peeks stand in one line, must-see first. No other activity's peek cuts a must-see one short, and a newer peek from the same activity (`Peek.source`) replaces its own.
 
@@ -40,11 +41,10 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 - Each warning is recorded only once the island has shown its peek (`ActivityCenter.peekWasShown`), so a peek nobody saw is asked for again. A window is told from the next by its reset time, and times within 30 minutes count as the same window, since a provider can move it a little between readings. Within a window, usage never goes down: two Claude Code sessions can report a point apart, and the higher number stands.
 - Nothing polls. Each source waits for something to happen:
   - **Claude:** Claude Code's status line becomes a short shell line that hands its input to `UsageSocket`, a Unix socket in a folder only the owner can open, with macOS's own `nc`, then runs the owner's status line unchanged (`ClaudeStatusLineInstaller`). It names no path into Jambul, so moving or deleting Jambul breaks nothing.
-  - **Antigravity:** `agy -p /usage --output-format json` (about 6 s), once as Jambul starts or Antigravity is turned on, then when the Usage tab opens with numbers older than 5 minutes, when the Mac wakes, and while agy writes its log (FSEvents), at most once per 5 minutes. Its output goes to a file, and a run that hangs is stopped after 30 s, killed if it must.
+  - **Antigravity:** `agy -p /usage --output-format json` (about 6 s), once as Jambul starts or Antigravity is turned on, then when the Usage tab or Home opens with numbers older than 5 minutes, when the Mac wakes, and while agy writes its log (FSEvents), at most once per 5 minutes. Its output goes to a file, and a run that hangs is stopped after 30 s, killed if it must.
   - **Codex:** the `rate_limits` named "codex" that Codex writes into its session logs, read from the end of a log whenever FSEvents reports a change, and dated by when the log was written.
 - One wait at a time, for the next limit to start over.
 - The logos are their owners' trademarks (see `THIRD_PARTY_NOTICES.md`). Every usage motion plays once, except Claude's logo while Claude Code works: it turns one ray on a 2 s beat, holding still in between, and only while the open island shows it. Claude Code also sends its status line on a timer, so "working" means a session's request time grew in the last 20 s.
-- Coming beside the notch on its own, the usage activity doesn't count as started (`IslandActivity.countsAsStarted`), so the island doesn't keep opening on its tab afterwards.
 
 ## Sleep
 Anything due while the Mac sleeps waits for `NSWorkspace.didWakeNotification` before it shows or sounds. `Task.sleep` counts sleep time and can fire in a dark wake, with the display off and no audio; `didWake` only comes on a full wake.
@@ -62,4 +62,5 @@ Anything due while the Mac sleeps waits for `NSWorkspace.didWakeNotification` be
 - Buttons inside the island fire on the first click and don't reach the island's own tap. They're styled with `IslandButtonStyle`, whose fill is the hit area.
 - They never use `.disabled`: a disabled button passes the click through to the island's toggle.
 - Tabs use `IslandTabButtonStyle`, whose capsule is the hit area, though only the chosen tab draws it.
+- Home's cards are buttons whose whole card is the hit area. The battery's card has no tab to open, so it isn't a button, and a click on it toggles the island like a click on any other part of it.
 - A control that gives way to another in the same spot, like Keep Awake's Stop to Turn On, swaps only as the live activities change. That arms the guard against the rest of a double click (`IslandModel.acceptsPress`).

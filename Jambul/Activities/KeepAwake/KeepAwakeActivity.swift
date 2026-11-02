@@ -121,6 +121,12 @@ final class KeepAwakeActivity: IslandActivity {
         return String(localized: "On since \(time) · \(elapsed(seconds))")
     }
 
+    /// What its card on Home says: "On" for the first minute, then for how long, like "12m" or "1h 05m". Never "0m".
+    static func onFor(since: Date, at date: Date) -> String {
+        let seconds = date.timeIntervalSince(since)
+        return seconds >= 60 ? elapsed(seconds) : String(localized: "On")
+    }
+
     /// How long it has been on, like "12m" or "1h 05m".
     static func elapsed(_ seconds: TimeInterval) -> String {
         let minutes = max(Int(seconds / 60), 0)

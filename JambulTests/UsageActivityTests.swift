@@ -214,35 +214,6 @@ struct UsageActivityTests {
     }
 }
 
-/// The usage limits come beside the notch on their own; the island shouldn't keep opening on them once they're gone.
-@MainActor
-struct OpeningTabTests {
-    private let activities = ActivityCenter()
-
-    @Test func aTabThatCameLiveOnItsOwnLeavesTheOpeningTabAlone() async throws {
-        let started = TabbedTestActivity(id: "started")
-        let onItsOwn = TabbedTestActivity(id: "onItsOwn", countsAsStarted: false)
-        activities.register(started)
-        activities.register(onItsOwn)
-        let model = IslandModel(notch: NotchMetrics(size: CGSize(width: 180, height: 32), compactHeight: 33),
-                                activities: activities)
-        started.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        started.isLive = false
-        try await Task.sleep(for: .milliseconds(50))
-        onItsOwn.isLive = true
-        try await Task.sleep(for: .milliseconds(50))
-        onItsOwn.isLive = false
-        try await Task.sleep(for: .milliseconds(50))
-        model.clicked()
-        #expect(model.selectedTab == started.id)
-    }
-
-    @Test func theUsageLimitsDontCountAsStarted() {
-        #expect(!UsageActivity(activities: activities).countsAsStarted)
-    }
-}
-
 /// The island tells activities when a peek really shows: one that waits, or that nobody can see, isn't told yet.
 @MainActor
 struct PeekShownTests {

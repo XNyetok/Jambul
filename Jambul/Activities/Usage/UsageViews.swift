@@ -7,6 +7,9 @@ extension UsageActivity {
     var compactTrailing: some View { UsageCompactValue(activity: self) }
     var compactMinimal: AnyView { AnyView(UsageCompactLogo(activity: self)) }
     var tab: some View { UsageTab(activity: self) }
+    var homeCard: some View { UsageHomeCard(activity: self) }
+    /// Nothing to sum up with every subscription turned off.
+    var showsHomeCard: Bool { !enabled.isEmpty }
 
     /// The time left until a limit starts over, short enough for beside the notch: "45m", "9h59", "12h", "1d6h", "20d".
     /// Each unit is rounded up, as a wait is.
@@ -86,6 +89,49 @@ private struct UsageCompactValue: View {
             .monospacedDigit()
             .lineLimit(1)
             .fixedSize()
+    }
+}
+
+/// The usage limits' card on Home: each subscription the owner turned on, with its logo and its fullest limit, yellow
+/// from 80% and red from 95% as on the tab. Three leave no room for the card's name, which gives way to them, as the
+/// tab's large numbers do. Like the tab, it asks for numbers that are old as it appears.
+private struct UsageHomeCard: View {
+    let activity: UsageActivity
+
+    var body: some View {
+        let now = activity.currentDate
+        let providers = activity.enabled
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(providers, id: \.self) { provider in
+                    HStack(spacing: 6) {
+                        UsageLogo(provider: provider, size: 14)
+                        percent(provider, now: now)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                }
+            }
+            if providers.count < 3 {
+                Spacer(minLength: 0)
+                Text("Usage")
+                    .font(HomeCardStyle.labelFont)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear { activity.tabDidAppear() }
+    }
+
+    @ViewBuilder private func percent(_ provider: UsageProvider, now: Date) -> some View {
+        if let used = activity.readings[provider]?.fullest(at: now)?.used(at: now) {
+            Text(UsageActivity.percentText(used))
+                .foregroundStyle(used >= 0.8 ? UsageActivity.color(for: used, provider: provider) : .white)
+        } else {
+            Text(verbatim: "—")
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
