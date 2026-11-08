@@ -32,7 +32,7 @@ cd Jambul
 - **Private APIs** are allowed, since Jambul ships outside the Mac App Store, but load them at runtime and fail safe, the way `SpaceInspector` does.
 - **Measure, don't guess.** Check geometry and system behavior on a real Mac before relying on them.
 - **Performance budget:** about 0% CPU while idle, under 30 MB of memory (60 MB with media playing). React to system events; no polling timers.
-- **No lag.** Waits over about 100 ms feel slow. Every animation parameter lives in `Island/Motion.swift`, and anything that animates on its own uses Core Animation.
+- **No lag.** Waits over about 100 ms feel slow. Every animation parameter lives in `Island/Motion.swift`. Anything that keeps moving on its own either moves in short steps on a beat, holding still in between, or uses Core Animation.
 - **Interaction:** hover opens, moving away closes, a click toggles. The island never vanishes from under a resting pointer, and a click always visibly does something.
 
 ## Tests
@@ -59,7 +59,7 @@ Nothing scans comments or issues. Please don't paste logs, crash reports or scre
 ## Pull requests
 1. Create a branch from `main`.
 2. Keep each pull request to one change. Say what it changes and why, and add a screenshot or a short recording for anything visible.
-3. CI has to pass: a build with unit tests on macOS, and the secrets scan.
+3. CI has to pass: a build with unit tests on macOS, the secrets scan, and a scan of the pull request's title and description.
 4. Add user-facing changes to `CHANGELOG.md` under "Unreleased", in one sentence about what a user notices.
 5. A maintainer reviews it and squash-merges it into `main`.
 

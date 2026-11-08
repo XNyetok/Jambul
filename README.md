@@ -48,7 +48,7 @@ For usage limits, Jambul only reads what the tools on your Mac already know:
 Jambul never reads a login token.
 
 ## Performance
-Jambul aims for about 0% CPU while idle and less than 30 MB of memory. It reacts to system events instead of polling. Anything that moves on its own either moves in short steps on a beat, holding still in between, or uses Core Animation, and it pauses while nobody can see the island.
+Jambul aims for about 0% CPU while idle and less than 30 MB of memory. It reacts to system events instead of polling. Anything that keeps moving on its own either moves in short steps on a beat, holding still in between, or uses Core Animation, and it pauses while nobody can see the island.
 
 ## Contributing
 Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first, and see the [roadmap](docs/ROADMAP.md) and the [architecture notes](docs/ARCHITECTURE.md). Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
