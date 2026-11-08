@@ -58,12 +58,12 @@ Nothing scans comments or issues. Please don't paste logs, crash reports or scre
 
 ## Pull requests
 1. Create a branch from `main`.
-2. Keep each pull request to one change. Fill in the template, and add a screenshot or a short recording for anything visible.
+2. Keep each pull request to one change. Say what it changes and why, and add a screenshot or a short recording for anything visible.
 3. CI has to pass: a build with unit tests on macOS, and the secrets scan.
-4. Add user-facing changes to `CHANGELOG.md` under "Unreleased".
+4. Add user-facing changes to `CHANGELOG.md` under "Unreleased", in one sentence about what a user notices.
 5. A maintainer reviews it and squash-merges it into `main`.
 
-Commit messages and pull requests are in English. A commit's subject says what changed, in the imperative ("Fix the timer's ring after sleep"); its body says why.
+Commit messages and pull requests are in English, short and specific. A commit's subject says what changed, in the imperative and in about 50 characters ("Fix the timer's ring after sleep"). Add a body only when the subject doesn't explain why, in a few lines. How you tested it belongs in the pull request, not in the commit.
 
 ## AI-assisted contributions
 Contributions made with AI coding tools are welcome, and you are responsible for every line: understand it and test it on a real Mac.
