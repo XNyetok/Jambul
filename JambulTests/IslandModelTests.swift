@@ -3,7 +3,9 @@ import Foundation
 import Testing
 @testable import Jambul
 
-/// These run against real time: hover intent is 60 ms by default and the exit grace 120 ms, so the waits leave margin.
+/// These run against real time: hover intent is 60 ms by default and the exit grace 120 ms. A CI machine can stall long
+/// enough for timers due close together to run in either order, so wait for what should have happened (`waitUntil`)
+/// rather than sleep past it, and keep a check that something hasn't happened yet far from when it's due.
 @MainActor
 struct IslandModelTests {
     private let activities = ActivityCenter()
@@ -32,22 +34,29 @@ struct IslandModelTests {
         #expect(model.presentation == .lifted)
     }
 
+    /// A timer never fires early, so however slow the machine, the island can't open before the slow intent is over.
     @Test func aSlowerHoverSpeedWaitsLonger() async throws {
         let model = makeModel()
         model.hoverIntent = HoverSpeed.slow.intent
+        let hovered = ContinuousClock.now
         model.pointer(.notch, isInside: true)
-        try await Task.sleep(for: .milliseconds(90))
         #expect(model.presentation == .lifted)
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(model.presentation == .expanded)
+        try await waitUntil { model.presentation == .expanded }
+        #expect(hovered.duration(to: .now) >= HoverSpeed.slow.intent)
     }
 
+    /// A stall can only make one try slower, so the quickest of a few has to beat half the default intent.
     @Test func theFastHoverSpeedOpensAtOnce() async throws {
-        let model = makeModel()
-        model.hoverIntent = HoverSpeed.fast.intent
-        model.pointer(.notch, isInside: true)
-        try await Task.sleep(for: .milliseconds(30))
-        #expect(model.presentation == .expanded)
+        var quickest = Duration.seconds(1)
+        for _ in 0..<5 {
+            let model = makeModel()
+            model.hoverIntent = HoverSpeed.fast.intent
+            let hovered = ContinuousClock.now
+            model.pointer(.notch, isInside: true)
+            try await waitUntil { model.presentation == .expanded }
+            quickest = min(quickest, hovered.duration(to: .now))
+        }
+        #expect(quickest < HoverSpeed.normal.intent / 2)
     }
 
     @Test func resettingForgetsThePointer() async throws {
@@ -228,7 +237,9 @@ struct IslandModelTests {
                              mustBeSeen: true, source: second.id))
         try await Task.sleep(for: .milliseconds(300))
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
+        try await waitUntil { model.presentation == .compact }
+        // Nothing follows: a stall can only hold back a peek that shouldn't come, never make one come.
+        try await Task.sleep(for: .milliseconds(200))
         #expect(model.presentation == .compact)
         #expect(!transitions.steps.contains { $0.hasSuffix("peek") })
     }
@@ -291,15 +302,16 @@ struct IslandModelTests {
         let model = makeModel()
         model.pointer(.island, isInside: true)
         model.clicked()
-        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Timer done", duration: .milliseconds(400)))
+        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Timer done", duration: .seconds(1)))
         #expect(model.presentation == .expanded)
 
         model.pointer(.island, isInside: false)
+        try await waitUntil { model.presentation == .peek }
+        #expect(model.peek?.title == "Timer done")
+        // It stays for its time once it shows.
         try await Task.sleep(for: .milliseconds(200))
         #expect(model.presentation == .peek)
-        #expect(model.peek?.title == "Timer done")
-        try await Task.sleep(for: .milliseconds(450))
-        #expect(model.presentation == .idle)
+        try await waitUntil { model.presentation == .idle }
     }
 
     @Test func aPeekHeldPastItsDurationIsDropped() async throws {
@@ -395,7 +407,9 @@ struct IslandModelTests {
         try await Task.sleep(for: .milliseconds(300))
 
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
+        try await waitUntil { model.presentation == .compact }
+        // Nothing follows: a stall can only hold back a peek that shouldn't come, never make one come.
+        try await Task.sleep(for: .milliseconds(200))
         #expect(model.presentation == .compact)
         #expect(!transitions.steps.contains { $0.hasSuffix("peek") })
     }
@@ -403,13 +417,11 @@ struct IslandModelTests {
     @Test func aPeekDuringTheHoverIntentWaitsForTheIslandToClose() async throws {
         let model = makeModel()
         model.pointer(.notch, isInside: true)
-        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Hi", duration: .milliseconds(600)))
-        try await Task.sleep(for: .milliseconds(250))
-        #expect(model.presentation == .expanded)
+        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Hi", duration: .seconds(2)))
+        try await waitUntil { model.presentation == .expanded }
 
         model.pointer(.notch, isInside: false)
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(model.presentation == .peek)
+        try await waitUntil { model.presentation == .peek }
     }
 
     @Test func aNewPeekDoesntCancelAHoverInProgress() async throws {
@@ -430,30 +442,29 @@ struct IslandModelTests {
 
     @Test func aPeekThatArrivedAsAHoverOpenedAPeekShowsAsTheIslandCloses() async throws {
         let model = makeModel()
-        model.hoverIntent = HoverSpeed.slow.intent
+        // An intent far longer than any setting, so the second peek arrives well before the hover opens the island.
+        model.hoverIntent = .milliseconds(600)
         activities.peek(Peek(symbol: "bolt.fill", tint: .green, title: "Charging", duration: .seconds(2)))
         model.pointer(.island, isInside: true)
         try await Task.sleep(for: .milliseconds(50))
         activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Timer done", duration: .seconds(2)))
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(model.presentation == .expanded)
+        try await waitUntil { model.presentation == .expanded }
 
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
-        #expect(model.presentation == .peek)
+        try await waitUntil { model.presentation == .peek }
         #expect(model.peek?.title == "Timer done")
     }
 
     @Test func aPeekStaysWhileThePointerRestsOnIt() async throws {
         let model = makeModel()
-        model.hoverIntent = HoverSpeed.slow.intent
+        // An intent far longer than any setting, so the check below stays well clear of it on a machine that stalls.
+        model.hoverIntent = .milliseconds(600)
         activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Hi", duration: .milliseconds(50)))
         model.pointer(.island, isInside: true)
-        try await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: .milliseconds(150))
         // Past the peek's own duration, but the pointer is on it.
         #expect(model.presentation == .peek)
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(model.presentation == .expanded)
+        try await waitUntil { model.presentation == .expanded }
     }
 
     @Test func aPeekNeverClosesUnderARestingPointer() async throws {
@@ -660,8 +671,7 @@ struct IslandModelTests {
 
         // Leaving right away closes the island, and nothing on it is left to guard.
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(model.presentation == .compact)
+        try await waitUntil { model.presentation == .compact }
         #expect(model.acceptsPress(clickCount: 2))
     }
 
@@ -686,8 +696,7 @@ struct IslandModelTests {
 
         // Once the pointer goes, the island settles to its own size.
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
-        #expect(model.presentation == .idle)
+        try await waitUntil { model.presentation == .idle }
         #expect(model.compactSlotWidth == nil)
     }
 
@@ -716,7 +725,7 @@ struct IslandModelTests {
         #expect(model.presentation == .lifted)
         // Once the pointer goes they show in turn, the one the owner must see first.
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
+        try await waitUntil { model.presentation == .peek }
         #expect(model.peek?.title == "Low battery")
     }
 
@@ -774,16 +783,18 @@ struct IslandModelTests {
 
     @Test func hoverCountsOnceThePointerHasLeftAPeekThatAppearedUnderIt() async throws {
         let model = makeModel()
+        let watch = WatchLog()
+        model.watchesPointer = { watch.calls.append($0) }
         model.isPointerOnIsland = { true }
         activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Timer done", duration: .seconds(2)))
         model.pointer(.island, isInside: true)
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
+        // The pointer watch ends with the exit grace, once hover no longer waits for the pointer to leave.
+        try await waitUntil { watch.calls == [true, false] }
 
         // Coming back is coming for the peek.
         model.pointer(.island, isInside: true)
-        try await Task.sleep(for: .milliseconds(250))
-        #expect(model.presentation == .expanded)
+        try await waitUntil { model.presentation == .expanded }
     }
 
     @Test func aPeekWhoseTimeRunsOutUnderThePointerStaysUntilThePointerGoes() async throws {
@@ -938,7 +949,8 @@ struct IslandModelTests {
         // in between: the pointer never really left, so the click-close still holds.
         model.pointer(.island, isInside: false)
         activity.isLive = true
-        try await Task.sleep(for: .milliseconds(10))
+        // The live update is a main-actor task, not a timer, so one turn delivers it well inside the exit grace.
+        await Task.yield()
         #expect(model.activity?.id == activity.id)
         model.pointer(.island, isInside: true)
         try await Task.sleep(for: .milliseconds(300))
@@ -1065,14 +1077,13 @@ struct IslandModelTests {
         screen.canBeSeen = false
         activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Timer done", duration: .milliseconds(300),
                              mustBeSeen: true, source: "timer"))
-        activities.peek(Peek(symbol: "battery.25", tint: .red, title: "Low battery", duration: .milliseconds(300),
+        activities.peek(Peek(symbol: "battery.25", tint: .red, title: "Low battery", duration: .seconds(1),
                              mustBeSeen: true, source: "battery"))
         screen.canBeSeen = true
         model.visibilityMayHaveChanged()
         #expect(model.peek?.title == "Timer done")
-        try await Task.sleep(for: .milliseconds(450))
+        try await waitUntil { model.peek?.title == "Low battery" }
         #expect(model.presentation == .peek)
-        #expect(model.peek?.title == "Low battery")
     }
 
     @Test func aShowingPeekTheOwnerMustSeeWaitsAgainWhenTheScreenLocks() async throws {
@@ -1115,6 +1126,7 @@ struct IslandModelTests {
 
     @Test func otherWaitingPeeksGoWhenNobodyCanSeeThem() async throws {
         let model = makeModel()
+        let transitions = TransitionLog(model)
         let screen = Visibility()
         model.canBeSeen = { screen.canBeSeen }
         model.pointer(.island, isInside: true)
@@ -1126,25 +1138,26 @@ struct IslandModelTests {
         model.visibilityMayHaveChanged()
 
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
+        try await waitUntil { model.presentation == .idle }
+        // Nothing follows: a stall can only hold back a peek that shouldn't come, never make one come.
+        try await Task.sleep(for: .milliseconds(200))
         #expect(model.presentation == .idle)
+        #expect(!transitions.steps.contains { $0.hasSuffix("peek") })
     }
 
     // MARK: Taking turns
 
     @Test func anotherActivitysPeekWaitsForOneTheOwnerMustSee() async throws {
         let model = makeModel()
-        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Timer done", duration: .milliseconds(300),
+        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Timer done", duration: .seconds(1),
                              mustBeSeen: true, source: "timer"))
-        activities.peek(Peek(symbol: "bolt.fill", tint: .green, title: "Charging", duration: .milliseconds(300),
+        activities.peek(Peek(symbol: "bolt.fill", tint: .green, title: "Charging", duration: .milliseconds(500),
                              source: "battery"))
         #expect(model.peek?.title == "Timer done")
-        // It gets its whole time once its turn comes.
-        try await Task.sleep(for: .milliseconds(450))
+        // Its time from arrival runs out while it waits, but it gets its whole time once its turn comes.
+        try await waitUntil { model.peek?.title == "Charging" }
         #expect(model.presentation == .peek)
-        #expect(model.peek?.title == "Charging")
-        try await Task.sleep(for: .milliseconds(400))
-        #expect(model.presentation == .idle)
+        try await waitUntil { model.presentation == .idle }
     }
 
     @Test func onesTheOwnerMustSeeGoFirst() async throws {
@@ -1161,25 +1174,25 @@ struct IslandModelTests {
     }
 
     @Test func newsWaitingBehindAPeekTheOwnerMustSeeStillGetsItsTurn() async throws {
-        let keepAwake = TestActivity(id: "keepAwake", isLive: true)
+        let keepAwake = TabbedTestActivity(id: "keepAwake", isLive: true)
         activities.register(keepAwake)
         let model = makeModel()
         model.pointer(.island, isInside: true)
         model.clicked()
+        // Open on Keep Awake's tab, its news keeps only for its time, while the battery's waits as long as it takes.
+        #expect(model.selectedTab == keepAwake.id)
         // The battery falls to 20% with the island open: its warning, then Keep Awake saying it turned off for it.
-        activities.peek(Peek(symbol: "battery.25", tint: .red, title: "Low battery", duration: .milliseconds(300),
+        activities.peek(Peek(symbol: "battery.25", tint: .red, title: "Low battery", duration: .seconds(1),
                              mustBeSeen: true, source: "battery"))
         activities.peek(Peek(symbol: "eye.slash.fill", tint: .orange, title: "Keep Awake off",
-                             duration: .milliseconds(300), mustBeSeen: true, source: keepAwake.id))
+                             duration: .milliseconds(800), mustBeSeen: true, source: keepAwake.id))
         try await Task.sleep(for: .milliseconds(100))
 
         // Closing within Keep Awake's own time, it follows the warning, though its time from arrival has run out.
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
-        #expect(model.peek?.title == "Low battery")
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntil { model.peek?.title == "Low battery" }
+        try await waitUntil { model.peek?.title == "Keep Awake off" }
         #expect(model.presentation == .peek)
-        #expect(model.peek?.title == "Keep Awake off")
     }
 
     @Test func aNewerPeekFromTheSameActivityReplacesItsOwn() {
@@ -1197,15 +1210,14 @@ struct IslandModelTests {
         model.clicked()
         activities.peek(Peek(symbol: "bolt.fill", tint: .green, title: "Charging", duration: .seconds(2),
                              source: "battery"))
-        activities.peek(Peek(symbol: "battery.75", tint: .white, title: "On battery", duration: .milliseconds(300),
+        activities.peek(Peek(symbol: "battery.75", tint: .white, title: "On battery", duration: .seconds(1),
                              source: "battery"))
 
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(250))
+        try await waitUntil { model.presentation == .peek }
         #expect(model.peek?.title == "On battery")
         // Its older news doesn't follow it.
-        try await Task.sleep(for: .milliseconds(450))
-        #expect(model.presentation == .idle)
+        try await waitUntil { model.presentation == .idle }
     }
 
     @Test func hidingTheIslandKeepsAPeekTheOwnerMustSee() {

@@ -237,10 +237,10 @@ struct PeekShownTests {
         let model = makeModel()
         model.pointer(.island, isInside: true)
         model.clicked()
-        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Later", duration: .milliseconds(400)))
+        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Later", duration: .seconds(2)))
         #expect(log.peeks.isEmpty)
         model.pointer(.island, isInside: false)
-        try await Task.sleep(for: .milliseconds(200))
+        try await waitUntil { !log.peeks.isEmpty }
         #expect(log.peeks.map(\.title) == ["Later"])
     }
 
