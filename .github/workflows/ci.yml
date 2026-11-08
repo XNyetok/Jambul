@@ -39,6 +39,9 @@ jobs:
           persist-credentials: false
 
       - name: Install gitleaks
+        env:
+          # Read-only, for downloading through GitHub's API if github.com's release link fails.
+          GH_TOKEN: ${{ github.token }}
         run: scripts/ci-install-gitleaks.sh
 
       # The scan the git hooks run, for anything pushed with the hooks skipped or missing.
