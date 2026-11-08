@@ -239,14 +239,6 @@ struct IslandPanelFitterTests {
         #expect(panel.ignoresMouseEvents)
         withExtendedLifetime(fitter) {}
     }
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(2)
-        while !condition() {
-            try #require(ContinuousClock.now < deadline, "timed out")
-            try await Task.sleep(for: .milliseconds(1))
-        }
-    }
 }
 
 /// Where the pointer is, as the panel asks for it.
