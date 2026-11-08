@@ -3,7 +3,7 @@
 Where Jambul is and where it's heading. Plans change as we learn; open an issue if there's something you'd like to see.
 
 ## Principles
-- **Native and light.** Swift, AppKit for windows, SwiftUI for drawing, Core Animation for anything that moves on its own. Idle CPU ≈ 0%, memory under 30 MB, no polling.
+- **Native and light.** Swift, AppKit for windows, SwiftUI for drawing. Anything that keeps moving on its own does so in short steps on a beat, or with Core Animation. Idle CPU ≈ 0%, memory under 30 MB, no polling.
 - **Apple-like.** Black and minimal; Jambul's character comes through small interactions.
 - **Calm interaction.** Hover opens, moving away closes, a click toggles. No swipe gestures.
 - **macOS 14 and later.** Liquid Glass on macOS 26 and later.

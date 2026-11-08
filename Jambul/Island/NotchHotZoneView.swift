@@ -1,7 +1,7 @@
 import AppKit
 
-/// An invisible view covering the physical notch. It notices the pointer while the island is idle,
-/// so the island window never has to catch clicks anywhere outside the notch.
+/// An invisible view over the notch, or the top center of a screen without one. It notices the pointer there, so the
+/// island's window can ignore the mouse while the island is idle.
 final class NotchHotZoneView: NSView {
     var onHoverChange: (@MainActor (Bool) -> Void)?
     var onClick: (@MainActor () -> Void)?
@@ -11,9 +11,9 @@ final class NotchHotZoneView: NSView {
         didSet { withoutAnimation { fill.frame = notchFrame } }
     }
 
-    /// The window server lets clicks fall through fully transparent pixels, so the hot zone fills the notch's
-    /// shape in black, hidden behind the notch itself. Screens without a notch would show the fill, so there
-    /// it stays clear and responds to hover alone.
+    /// Fills the notch's shape in black, hidden behind the notch itself; screens without a notch would show the
+    /// fill, so there it stays clear. Clicks don't depend on it: the hot zone's window sets `ignoresMouseEvents` to
+    /// false, so it takes every click across its frame, clear pixels too.
     var drawsNotch = true {
         didSet { withoutAnimation { fill.isHidden = !drawsNotch } }
     }
