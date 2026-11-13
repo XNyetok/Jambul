@@ -42,6 +42,11 @@ final class IslandModel {
     /// both animate as one.
     private(set) var liveActivities: [any IslandActivity]
     private(set) var peek: Peek?
+    /// With more than two live, the one of those past the first that shows left of the notch now: they take turns
+    /// there. Kept by its id, so it stays as others start, end or change places; nil shows the second.
+    private(set) var compactTurnHolder: String?
+    /// How many turns have been taken, for tests.
+    @ObservationIgnored private(set) var compactTurn = 0
     /// The activity whose tab the open island shows.
     private(set) var selectedTab: String?
     /// The side the shown tab's content came in from: the side its tab lies on, seen from the tab before it.
@@ -65,6 +70,15 @@ final class IslandModel {
     /// the model, like the screen's notch or an activity's own slot width, don't come through here, and neither does a
     /// tab changing in the open island, which keeps its size.
     @ObservationIgnored var onWillChange: (@MainActor (_ next: IslandPresentation) -> Void)?
+    /// How long each of the activities taking turns left of the notch shows there.
+    @ObservationIgnored var compactTurnLength = Motion.compactTurn {
+        didSet {
+            // A turn already waiting starts over on the new length.
+            turnTask?.cancel()
+            turnTask = nil
+            updateTurns()
+        }
+    }
     /// How long the pointer has to rest on the notch before the island opens.
     @ObservationIgnored var hoverIntent = HoverSpeed.normal.intent
     /// Whether anyone can see the island right now: not while the display sleeps or the screen is locked. Asked as
@@ -88,6 +102,8 @@ final class IslandModel {
     @ObservationIgnored private var expandTask: Task<Void, Never>?
     /// Closing once the pointer has left.
     @ObservationIgnored private var collapseTask: Task<Void, Never>?
+    /// The next turn left of the notch coming up.
+    @ObservationIgnored private var turnTask: Task<Void, Never>?
     /// The showing peek's own time running out.
     @ObservationIgnored private var peekTask: Task<Void, Never>?
     /// Set while the pointer is on the island without having come to open it: a click closed the island under it, or a
@@ -122,13 +138,29 @@ final class IslandModel {
         activities.onLiveActivityChange = { [weak self] in self?.liveActivityDidChange() }
         activities.onPeek = { [weak self] in self?.show($0) }
         activities.onWithdrawPeeks = { [weak self] in self?.withdrawPeeks(from: $0, topic: $1) }
+        updateTurns()
     }
 
     /// The most important live activity.
     var activity: (any IslandActivity)? { liveActivities.first }
 
-    /// The activities beside the notch: the two most important live ones.
-    var compactActivities: [any IslandActivity] { Array(liveActivities.prefix(2)) }
+    /// The activities beside the notch: the most important one, which keeps the right, and one other, whose glyph
+    /// shows on the left. With more than two live, the others take turns there (`compactTurn`), so each is seen.
+    var compactActivities: [any IslandActivity] {
+        guard liveActivities.count > 2 else { return Array(liveActivities.prefix(2)) }
+        let others = liveActivities.dropFirst()
+        return [liveActivities[0], others.first { $0.id == compactTurnHolder } ?? liveActivities[1]]
+    }
+
+    /// Gives the next of the activities past the first its turn left of the notch, after the one showing there now.
+    func takeNextCompactTurn() {
+        let others = liveActivities.dropFirst().map(\.id)
+        guard others.count > 1 else { return }
+        let current = others.firstIndex { $0 == compactTurnHolder } ?? 0
+        Logger.island.debug("next activity's turn beside the notch")
+        compactTurn += 1
+        withAnimation(Motion.tabStateChange) { compactTurnHolder = others[(current + 1) % others.count] }
+    }
 
     /// The activities with a tab in the open island, in the order they were registered.
     var tabs: [any IslandActivity] { center.activities.filter(\.hasTab) }
@@ -136,7 +168,8 @@ final class IslandModel {
     /// The width of the slot right of the notch: what the most important compact activity needs there, or the room
     /// held for the pointer if that is wider.
     var compactSlotWidth: CGFloat? {
-        let own = compactActivities.first?.compactSlotWidth
+        // The first activity's, whoever has the turn on the left: the island keeps its size as turns change.
+        let own = liveActivities.first?.compactSlotWidth
         guard let heldSlotWidth else { return own }
         return max(heldSlotWidth, own ?? 0)
     }
@@ -145,8 +178,9 @@ final class IslandModel {
     /// or the room held for the pointer if that is wider. Each side is as wide as what it holds, so the island needn't
     /// be centered on the notch.
     var compactLeadingWidth: CGFloat? {
-        let compact = compactActivities
-        let own = (compact.count > 1 ? compact[1] : compact.first)?.compactLeadingWidth
+        // Every activity that takes a turn there fits, so the island keeps its size as they change.
+        let own = liveActivities.count > 1 ? liveActivities.dropFirst().map(\.compactLeadingWidth).max()
+            : liveActivities.first?.compactLeadingWidth
         guard let heldLeadingWidth else { return own }
         return max(heldLeadingWidth, own ?? 0)
     }
@@ -301,6 +335,26 @@ final class IslandModel {
         // Hidden for a full-screen app, the island still shows while it is out for a peek, and while that is open.
         let visible = !isOutOfSight && (!isHidden || !isResting)
         if visible != isVisible { isVisible = visible }
+        updateTurns()
+    }
+
+    /// Lets the activities past the first take turns left of the notch, only while more than two are live and the
+    /// island rests beside the notch where someone can see it. Under the pointer, open or out of sight, whoever shows
+    /// there stays, and nothing wakes Jambul.
+    private func updateTurns() {
+        let takesTurns = liveActivities.count > 2 && presentation == .compact && isVisible
+        guard takesTurns != (turnTask != nil) else { return }
+        turnTask?.cancel()
+        turnTask = nil
+        guard takesTurns else { return }
+        turnTask = Task { [weak self] in
+            while let length = self?.compactTurnLength {
+                // A turn may come a little late, so the system can line it up with other work.
+                try? await Task.sleep(for: length, tolerance: min(Motion.compactTurnTolerance, length / 10))
+                guard !Task.isCancelled, let self else { return }
+                self.takeNextCompactTurn()
+            }
+        }
     }
 
     /// Watches the pointer only while hover waits for it to leave a peek it never came for.

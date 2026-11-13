@@ -6,6 +6,7 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ### Added
 - As the island opens, the glyph beside the notch travels to its place on the tab or on Home, and back as it closes.
+- With more than two activities running, the ones that didn't fit beside the notch take turns on its left.
 
 ### Changed
 - Jambul now needs macOS 27 or later.

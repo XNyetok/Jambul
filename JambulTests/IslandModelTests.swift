@@ -170,7 +170,9 @@ struct IslandModelTests {
         #expect(model.compactSlotWidth == 42)
     }
 
-    @Test func onlyTheTwoMostImportantRestBesideTheNotch() {
+    /// Two rest beside the notch at a time, the most important on the right. The others take turns on the left
+    /// (`CompactTurnsTests`); until the first turn it is the second most important.
+    @Test func twoRestBesideTheNotchAtATime() {
         activities.register(TestActivity(id: "a", isLive: true))
         activities.register(TestActivity(id: "b", isLive: true, priority: .high))
         activities.register(TestActivity(id: "c", isLive: true, compactSlotWidth: 80))
