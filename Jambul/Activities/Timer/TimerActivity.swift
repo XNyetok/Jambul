@@ -83,6 +83,7 @@ final class TimerActivity: NSObject, IslandActivity {
     var compactSlotWidth: CGFloat { shown.total >= 3600 ? 54 : 42 }
     /// The ring.
     var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight }
+    var compactGlyph: String? { "timer.ring" }
 
     /// Weak, since the center holds its activities.
     @ObservationIgnored private weak var activities: ActivityCenter?

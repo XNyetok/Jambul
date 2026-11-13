@@ -109,6 +109,7 @@ private struct UsageHomeCard: View {
                 ForEach(providers, id: \.self) { provider in
                     HStack(spacing: 6) {
                         UsageLogo(provider: provider, size: 14)
+                            .islandGlyph(UsageActivity.glyph(of: provider))
                         percent(provider, now: now)
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .monospacedDigit()
@@ -247,6 +248,7 @@ private struct UsageColumn: View {
             .rotationEffect(.degrees(logoTurn))
             .scaleEffect(appeared || reduceMotion ? 1 : Motion.Usage.popScale)
             .opacity(appeared ? 1 : 0)
+            .islandGlyph(UsageActivity.glyph(of: provider))
     }
 
     private var logoTurn: Double {

@@ -42,6 +42,7 @@ extension TimerActivity {
         HomeCardContent(state.isPaused ? Text("Paused") : Text("Timer")) {
             Image(systemName: tabSymbol)
                 .foregroundStyle(state == .idle ? AnyShapeStyle(.secondary) : AnyShapeStyle(tint))
+                .islandGlyph(compactGlyph)
         } value: {
             if state == .idle {
                 Text("Off")
@@ -83,6 +84,7 @@ private struct TimerStartTab: View {
         HStack(spacing: 14) {
             TimerRing(fraction: 0, lineWidth: IslandLayout.tabRingWidth)
                 .frame(width: IslandLayout.tabGlyphHeight, height: IslandLayout.tabGlyphHeight)
+                .islandGlyph(timer.compactGlyph)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Timer")
                     .font(IslandLayout.tabTitleFont)
@@ -114,6 +116,7 @@ private struct TimerCountdownTab: View {
                 HStack(spacing: 14) {
                     TimerRing(fraction: fraction, lineWidth: IslandLayout.tabRingWidth)
                         .frame(width: IslandLayout.tabGlyphHeight, height: IslandLayout.tabGlyphHeight)
+                        .islandGlyph(timer.compactGlyph)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(TimerActivity.format(remaining))
                             .font(.system(size: 32, weight: .semibold, design: .rounded))

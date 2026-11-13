@@ -32,6 +32,7 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 
 ## Motion and drawing
 - Every animation parameter lives in `Island/Motion.swift`. Views don't define their own springs.
+- The glyph left of the notch is drawn over the island's content (`IslandGlyphFlyer`), so it can leave its slot: as the island opens it travels to its own place there, if the tab shown marks one with `islandGlyph` (the timer's ring, a subscription's logo, a session's circle, Keep Awake's eye on Home), and gives way to the glyph that belongs there once it lands. It travels back as the island closes. With Reduce Motion it stays in its slot.
 - Always-on ambient animations (visualizers, pulses) use Core Animation rather than repeating SwiftUI animations; on a MacBook Air that measured about 8–10× less CPU. Core Animation moves the cost rather than removing it, though: a continuous animation still cost WindowServer about 16 CPU points.
 - Displays that change slowly, like the timer's countdown, redraw once a second with `TimelineView(.periodic)` and no animation (about 0.35% CPU). Rolling digits and `ProgressView(timerInterval:)` both drew at 60 fps. A number that only changes now and then, like a usage percentage or the battery's charge, does roll as it changes (`Motion.numberTransition`).
 - Keep Awake's eye and laptop move on one shared beat (`KeepAwakeBeat`), so Jambul wakes once for both.

@@ -119,6 +119,12 @@ enum Motion {
         reduceMotion ? .opacity : AnyTransition(.blurReplace)
     }
 
+    /// How long the glyph left of the notch takes to reach its place in the open island: the opening spring is all but
+    /// there by then. Its place stays empty until it lands.
+    static let glyphFlight: Duration = .milliseconds(260)
+    /// The glyph that flew giving way to the one that belongs there, which can be drawn differently.
+    static let glyphLanding: Animation = .easeOut(duration: 0.12)
+
     /// An activity's tab trading what it shows, like the timer's quick starts for its countdown.
     static var tabStateChange: Animation {
         reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.35, bounce: 0)
