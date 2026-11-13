@@ -87,37 +87,12 @@ final class GlyphFlightTests {
     private var bytesPerRow = 1
     private var bytesPerPixel = 4
 
-    /// A drawing averaged over blocks of four by four pixels, each color apart. The paused timer's ring is drawn at half
-    /// strength, so a whole pixel off changes a block by about 32, and a ring that is missing or doubled by far more.
-    private func blocks(of pixels: [UInt8]) -> [UInt8] {
-        let width = bytesPerRow / bytesPerPixel, height = pixels.count / bytesPerRow
-        var blocks = [UInt8]()
-        for row in stride(from: 0, to: height - 3, by: 4) {
-            for column in stride(from: 0, to: width - 3, by: 4) {
-                for channel in 0..<bytesPerPixel {
-                    var sum = 0
-                    for y in row..<row + 4 {
-                        for x in column..<column + 4 { sum += Int(pixels[y * bytesPerRow + x * bytesPerPixel + channel]) }
-                    }
-                    blocks.append(UInt8(sum / 16))
-                }
-            }
-        }
-        return blocks
-    }
-
-    /// Whether two drawings are alike but for a glyph a pixel off.
-    private func areAlikeInBlocks(_ one: [UInt8], _ other: [UInt8]) -> Bool {
-        zip(blocks(of: one), blocks(of: other)).allSatisfy { abs(Int($0) - Int($1)) <= 48 }
-    }
-
-    /// Waits until two views are drawn alike, and says where they differ if they never are. `toThePixel` asks for
-    /// every pixel; without it, alike in blocks of pixels.
-    private func waitUntilDrawnAlike(_ one: NSView, _ other: NSView, toThePixel: Bool = true) async throws {
+    /// Waits until two views are drawn alike, and says where they differ if they never are.
+    private func waitUntilDrawnAlike(_ one: NSView, _ other: NSView) async throws {
         let deadline = ContinuousClock.now + .seconds(5)
         while true {
             let first = try pixels(of: one), second = try pixels(of: other)
-            if toThePixel ? difference(first, second) == 0 : areAlikeInBlocks(first, second) { return }
+            if difference(first, second) == 0 { return }
             if ContinuousClock.now >= deadline {
                 let differing = zip(first, second).enumerated()
                     .filter { abs(Int($0.element.0) - Int($0.element.1)) > 24 }.map(\.offset)
@@ -216,13 +191,13 @@ final class GlyphFlightTests {
         #expect(try drawsSomething(pixels(of: opened)))
     }
 
-    /// Closed again, the island is drawn as its content alone: the glyph is back in its slot. Compared in blocks of
-    /// pixels: on a display with one pixel per point, as CI's is, a glyph that has flown back ends a pixel away from
-    /// one that never left, where every pixel matches on a Retina display.
+    /// Closed again, the island is drawn exactly as one that never opened: the glyph is back in its slot, to the pixel.
+    /// Compared with the island's own view rather than with its content alone: on a display with one pixel per point,
+    /// as CI's is, the travelling glyph rounds a slot on a half point to another pixel than plain content does.
     @Test func onceClosedTheGlyphIsBackBesideTheNotch() async throws {
         let timer = registerWithAPausedTimer()
         defer { timer.stop() }
-        let neverOpened = hostAtRest(IslandModel(notch: notch, activities: activities))
+        let neverOpened = host(IslandModel(notch: notch, activities: activities))
 
         let model = IslandModel(notch: notch, activities: activities)
         let closed = host(model)
@@ -231,7 +206,7 @@ final class GlyphFlightTests {
         try await Task.sleep(for: .milliseconds(900))
         model.clicked()
         #expect(model.presentation == .compact)
-        try await waitUntilDrawnAlike(closed, neverOpened, toThePixel: false)
+        try await waitUntilDrawnAlike(closed, neverOpened)
         // And something is drawn there at all: the ring, in the timer's color.
         #expect(try drawsSomething(pixels(of: closed)))
     }
