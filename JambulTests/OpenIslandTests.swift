@@ -111,6 +111,34 @@ final class OpenIslandTests {
         }
     }
 
+    /// The open island draws nothing outside its own shape: a shadow there was cut off in a line by the window's edge.
+    @Test func theOpenIslandDrawsNothingAroundItself() throws {
+        registerJambulsActivities()
+        let model = IslandModel(notch: notch, activities: activities, presentation: .expanded)
+        let canvas = IslandLayout.canvasSize(notch)
+        let renderer = ImageRenderer(content: IslandView(model: model).frame(width: canvas.width, height: canvas.height))
+        renderer.scale = 1
+        let image = try #require(renderer.cgImage)
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let context = try #require(CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
+                                             bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        // From the top-left corner, as the island hangs from the top.
+        func alpha(x: CGFloat, y: CGFloat) -> UInt8 { pixels[(Int(y) * width + Int(x)) * 4 + 3] }
+
+        let bottom = IslandLayout.expandedSize.height
+        let left = (canvas.width - IslandLayout.expandedSize.width) / 2
+        #expect(alpha(x: canvas.width / 2, y: bottom - 4) == 255)
+        for below in stride(from: CGFloat(2), to: IslandLayout.canvasMargin, by: 4) {
+            #expect(alpha(x: canvas.width / 2, y: bottom + below) == 0, "\(below) pt below the island")
+        }
+        for beside in stride(from: CGFloat(2), to: IslandLayout.canvasMargin, by: 4) {
+            #expect(alpha(x: left - beside, y: bottom / 2) == 0, "\(beside) pt left of the island")
+        }
+    }
+
     /// The width a view takes when offered `proposedWidth`, or all it wants when offered nothing.
     private func width(of view: some View, proposedWidth: CGFloat?) throws -> CGFloat {
         let renderer = ImageRenderer(content: view)

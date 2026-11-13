@@ -4,7 +4,8 @@ import CoreGraphics
 struct IslandLayout {
     /// The open island, the same on every tab so it never grows or shrinks under the pointer as tabs change.
     static let expandedSize = CGSize(width: 480, height: 150)
-    static let shadowMargin: CGFloat = 24
+    /// Room around the open island in its window.
+    static let canvasMargin: CGFloat = 24
     /// Bottom corner radius of the idle island, kept inside the physical notch's outline.
     static let notchCornerRadius: CGFloat = 10
     /// Flares at the top of the compact island, which take this much off each side of its frame.
@@ -56,17 +57,14 @@ struct IslandLayout {
         return min(tabButtonSize.width, (room / CGFloat(count)).rounded(.down))
     }
 
-    /// The fixed size of the window hosting the island: room for the open island and its shadow.
+    /// The fixed size of the window hosting the island: the open island and some room around it.
     static func canvasSize(_ notch: NotchMetrics) -> CGSize {
-        CGSize(width: expandedSize.width + 2 * shadowMargin, height: expandedSize.height + shadowMargin)
+        CGSize(width: expandedSize.width + 2 * canvasMargin, height: expandedSize.height + canvasMargin)
     }
 
     let size: CGSize
     let topRadius: CGFloat
     let bottomRadius: CGFloat
-    /// Whether the island casts its shadow, as only the open island does. Its panel then needs the whole canvas, which
-    /// leaves room for the shadow.
-    let castsShadow: Bool
 
     /// - Parameter compactSlotWidth: The width of each slot beside the notch, or `nil` when nothing is live.
     init(_ presentation: IslandPresentation, notch: NotchMetrics, compactSlotWidth: CGFloat?) {
@@ -87,7 +85,7 @@ struct IslandLayout {
             self.init(size: CGSize(width: max(340, resting.width), height: notch.size.height + 38), topRadius: 10,
                       bottomRadius: 24)
         case .expanded:
-            self.init(size: Self.expandedSize, topRadius: 14, bottomRadius: 32, castsShadow: true)
+            self.init(size: Self.expandedSize, topRadius: 14, bottomRadius: 32)
         }
     }
 
@@ -96,10 +94,9 @@ struct IslandLayout {
         CGRect(x: panel.midX - size.width / 2, y: panel.maxY - size.height, width: size.width, height: size.height)
     }
 
-    private init(size: CGSize, topRadius: CGFloat, bottomRadius: CGFloat, castsShadow: Bool = false) {
+    private init(size: CGSize, topRadius: CGFloat, bottomRadius: CGFloat) {
         self.size = size
         self.topRadius = topRadius
         self.bottomRadius = bottomRadius
-        self.castsShadow = castsShadow
     }
 }

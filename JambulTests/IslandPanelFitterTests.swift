@@ -59,7 +59,7 @@ struct IslandPanelFitterTests {
         #expect(model.presentation == .lifted)
         #expect(panel.frame == fitter.canvas)
 
-        // Open, the island casts its shadow across the canvas, so the panel keeps all of it.
+        // Open, the panel keeps the whole canvas.
         try await Task.sleep(for: .milliseconds(300))
         #expect(model.presentation == .expanded)
         #expect(panel.frame == fitter.canvas)

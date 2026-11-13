@@ -189,7 +189,7 @@ struct IslandModelTests {
         // One size on every tab and with any number live, so the island never grows or shrinks under the pointer.
         #expect(quiet.layout.size == IslandLayout.expandedSize)
         #expect(busy.layout.size == IslandLayout.expandedSize)
-        #expect(IslandLayout.expandedSize.height + IslandLayout.shadowMargin <= IslandLayout.canvasSize(busy.notch).height)
+        #expect(IslandLayout.expandedSize.height + IslandLayout.canvasMargin <= IslandLayout.canvasSize(busy.notch).height)
     }
 
     @Test func anotherActivityGoingLiveWhileOpenKeepsTheIslandOpenAndGuardsTheDoubleClick() async throws {
