@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Gets a clone ready for working on Jambul: installs the git hooks that keep secrets, personal data and AI
-# attribution out of commits, merges and pushes. Safe to run again, and needed again after .githooks/ changes.
+# Gets a clone ready for working on Jambul: installs the git hooks that keep secrets and personal data out of
+# commits, merges and pushes. Safe to run again, and needed again after .githooks/ changes.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

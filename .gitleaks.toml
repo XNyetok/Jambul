@@ -1,5 +1,5 @@
 # gitleaks' default rules, which know hundreds of token and key formats. Jambul's own rules (home-folder paths, email
-# addresses, AI attribution, CI skip markers and files that must never be committed) live in scripts/scan.sh, which
+# addresses, CI skip markers and files that must never be committed) live in scripts/scan.sh, which
 # applies them itself to every file, including the ones gitleaks would skip as binary or allow by name.
 title = "Jambul"
 

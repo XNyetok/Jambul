@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   scan:
-    name: Secrets, personal data and AI attribution
+    name: Secrets and personal data
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
