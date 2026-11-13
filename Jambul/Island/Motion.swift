@@ -68,7 +68,9 @@ enum Motion {
         case .lifted:
             // Folding back after a click is a close, so it moves like one.
             previous == .expanded ? Spring(duration: 0.35, bounce: 0) : arrivalLift
-        case .peek, .expanded: Spring(duration: 0.45, bounce: 0.25)
+        // A peek is news arriving, so it bounces; opening under the pointer is the owner's own move, and stays calmer.
+        case .peek: Spring(duration: 0.45, bounce: 0.25)
+        case .expanded: Spring(duration: 0.45, bounce: 0.15)
         }
     }
 
@@ -101,6 +103,22 @@ enum Motion {
             removal: .opacity.animation(.easeIn(duration: 0.1)))
     }
 
+    /// A number rolling to its new value, like a usage percentage or the battery's charge, and a symbol trading places
+    /// with another, like pause with play. Only as the value changes, so nothing moves at rest.
+    static var valueChange: Animation {
+        reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.4, bounce: 0)
+    }
+
+    /// How a number changes: its digits roll toward `value`, or simply swap with Reduce Motion.
+    static func numberTransition(value: Double) -> ContentTransition {
+        reduceMotion ? .identity : .numericText(value: value)
+    }
+
+    /// One glyph giving way to another in the same spot, like a session's ring to its check mark.
+    static var glyphSwap: AnyTransition {
+        reduceMotion ? .opacity : AnyTransition(.blurReplace)
+    }
+
     /// An activity's tab trading what it shows, like the timer's quick starts for its countdown.
     static var tabStateChange: Animation {
         reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.35, bounce: 0)
@@ -110,8 +128,9 @@ enum Motion {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
-    /// The usage limits: each motion plays once, as something happens, so nothing moves at rest. The one exception is
-    /// Claude's logo turning while Claude Code works, and only while the open island shows it.
+    /// The usage limits: each motion plays once, as something happens, so nothing moves at rest. The exceptions step on
+    /// one shared beat while Claude Code works, and only while the open island shows them: Claude's logo here, and a
+    /// working session's ring (`Agent`).
     enum Usage {
         /// A logo turning in as a peek or the tab comes out.
         static let turn: Animation = .spring(duration: 0.9, bounce: 0.45)
@@ -147,13 +166,28 @@ enum Motion {
         /// Claude's logo while Claude Code works, only while the open island shows it: a step of one ray each beat,
         /// with nothing moving in between. A turn that never stops cost about 25 CPU points in WindowServer (measured).
         static let workingBeat: TimeInterval = 2
+        /// How long until the next beat. Beats fall on whole multiples of `workingBeat` on the clock, so everything
+        /// stepping on it moves at the same moment and Jambul wakes once for all of it.
+        static func untilNextBeat(after date: Date = .now) -> Duration {
+            let into = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: workingBeat)
+            return .seconds(workingBeat - into)
+        }
         static let workingStep: Animation = .spring(duration: 0.6, bounce: 0.3)
         static let workingStepAngle: Double = 36
     }
 
-    /// Claude Code's sessions: the eye on a peek saying how a turn ended, once, after the peek has come out.
+    /// Claude Code's sessions: the eye on a peek saying how a turn ended, once, after the peek has come out, and a
+    /// working session's ring in the open island.
     enum Agent {
         static let feel: Animation = .spring(duration: 0.6, bounce: 0.35).delay(0.35)
+        /// The eye shaking its head once the peek has come out, as a turn fails, and drooping only after that.
+        static let shakeAfter: Duration = .milliseconds(350)
+        static let shake: Animation = .spring(duration: 0.12, bounce: 0.2)
+        static let shakeOffsets: [CGFloat] = [0, -5, 5, -3, 3, 0]
+        static let droop: Animation = .spring(duration: 0.6, bounce: 0.35).delay(1.0)
+        /// The ring of a working session turning an eighth on each beat (`Usage.untilNextBeat`), and only while the
+        /// open island shows it. Nothing moves in between.
+        static let workingStepAngle: Double = 45
         /// A sad eye: half closed, tilted and a little lower.
         static let sadOpenness: CGFloat = 0.45
         static let sadTilt: Double = -12

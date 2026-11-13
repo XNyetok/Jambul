@@ -8,6 +8,7 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 - Jambul now needs macOS 27 or later.
 - Tab symbols are easier to read and take color only while their activity is running, cards on Home dim while theirs is off, and the Usage tab's columns line up.
 - Beside the notch, each side of the island is only as wide as what it shows, and the timer's and Keep Awake's tabs are larger.
+- Numbers roll as they change, a working session's ring turns a step at a time, a failed turn's eye shakes its head, and the island opens with less bounce.
 
 ## [0.3.0] - 2026-11-13
 Claude Code's sessions in the island, and tabs on both sides of the camera.

@@ -27,4 +27,24 @@ struct MotionTests {
             }
         }
     }
+
+    /// Opening under the pointer is calmer than a peek arriving: news bounces, the owner's own move doesn't much.
+    @Test func openingBouncesLessThanAPeekArriving() {
+        let open = Motion.spring(from: .lifted, to: .expanded), peek = Motion.spring(from: .compact, to: .peek)
+        #expect(open.bounce < peek.bounce)
+        #expect(open.bounce < 0.2)
+    }
+
+    /// Everything stepping on the working beat waits for the same moments on the clock, whenever it started waiting.
+    @Test func theWorkingBeatFallsOnTheSameMomentsForEveryone() {
+        let beat = Motion.Usage.workingBeat
+        for start in [0.0, 0.3, 1.9, 2.0, 7.25] {
+            let from = Date(timeIntervalSinceReferenceDate: 1_000 + start)
+            let wait = Motion.Usage.untilNextBeat(after: from)
+            let seconds = Double(wait.components.seconds) + Double(wait.components.attoseconds) / 1e18
+            #expect(seconds > 0 && seconds <= beat)
+            let lands = (from.timeIntervalSinceReferenceDate + seconds) / beat
+            #expect(abs(lands - lands.rounded()) < 1e-6)
+        }
+    }
 }

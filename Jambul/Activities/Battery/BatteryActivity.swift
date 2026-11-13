@@ -85,6 +85,8 @@ final class BatteryActivity: IslandActivity {
         } value: {
             Text((Double(reading.percent) / 100).formatted(.percent))
                 .foregroundStyle(color.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.primary))
+                .contentTransition(Motion.numberTransition(value: Double(reading.percent)))
+                .animation(Motion.valueChange, value: reading.percent)
         }
     }
 

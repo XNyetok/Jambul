@@ -205,6 +205,8 @@ struct TimerControls: View {
                 if timer.isPaused { timer.resume() } else { timer.pause() }
             } label: {
                 Image(systemName: timer.shown.isPaused ? "play.fill" : "pause.fill")
+                    .contentTransition(.symbolEffect(.replace))
+                    .animation(Motion.valueChange, value: timer.shown.isPaused)
             }
             .buttonStyle(.islandIcon(tint: timer.tint))
             .accessibilityLabel(timer.shown.isPaused ? Text("Resume") : Text("Pause"))
