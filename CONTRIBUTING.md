@@ -21,6 +21,7 @@ cd Jambul
 
 - `./scripts/run.sh` builds a debug build and relaunches it.
 - `./scripts/test.sh` runs the unit tests and shows compiler warnings, which an incremental build would hide.
+- `make run`, `make test` and `make setup` are shortcuts for these scripts.
 - `Jambul.xcodeproj` is generated from `project.yml`. Change settings in `project.yml`, then run `xcodegen generate`. New Swift files in `Jambul/` need no project changes.
 - Debug builds add a Debug submenu to the menu bar item, for trying each presentation on the real notch.
 
