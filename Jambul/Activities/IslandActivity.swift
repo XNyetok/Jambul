@@ -27,6 +27,11 @@ protocol IslandActivity: AnyObject, Observable {
     var tint: Color { get }
     /// The symbol on its tab.
     var tabSymbol: String { get }
+    /// The color of that symbol while the activity has something going on, or nil while it has not: the symbol is then
+    /// white on the chosen tab and dim on the others.
+    var tabTint: Color? { get }
+    /// Whether its card on Home has nothing going on, like a timer that is off. Such a card dims, so the others stand out.
+    var homeCardIsQuiet: Bool { get }
     /// Whether its card shows on Home now. One with nothing to say for a while stays off it, like the usage limits with
     /// every subscription turned off.
     var showsHomeCard: Bool { get }
@@ -49,6 +54,8 @@ extension IslandActivity {
     var compactSlotWidth: CGFloat { 36 }
     var tint: Color { .white }
     var tabSymbol: String { "circle.fill" }
+    var tabTint: Color? { isLive ? tint : nil }
+    var homeCardIsQuiet: Bool { false }
     var showsHomeCard: Bool { hasHomeCard }
     var compactMinimal: AnyView { AnyView(compactLeading) }
 

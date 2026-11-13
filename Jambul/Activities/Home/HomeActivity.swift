@@ -36,7 +36,7 @@ struct HomeTab: View {
                     Button { selectTab(activity.id) } label: {
                         activity.anyHomeCard
                     }
-                    .buttonStyle(HomeCardButtonStyle())
+                    .buttonStyle(HomeCardButtonStyle(isQuiet: activity.homeCardIsQuiet))
                 } else {
                     activity.anyHomeCard
                         .homeCardFrame(fill: HomeCardStyle.fill)
@@ -90,6 +90,9 @@ enum HomeCardStyle {
     static let labelFont = Font.system(size: 11, weight: .medium)
     /// The card's fill at rest, under the pointer, and pressed, a step brighter each time.
     static let fill = 0.08
+    /// A card with nothing going on: a fainter fill, and its content dimmed.
+    static let quietFill = 0.045
+    static let quietOpacity = 0.7
     static let hoveredFill = 0.11
     static let pressedFill = 0.16
 }
@@ -106,19 +109,24 @@ extension View {
 /// A card on Home as a button. The whole card is its hit area, so a click anywhere on it opens the tab rather than
 /// toggling the island; like the island's other controls, it brightens under the pointer and sinks while pressed.
 private struct HomeCardButtonStyle: ButtonStyle {
+    var isQuiet = false
+
     func makeBody(configuration: Configuration) -> some View {
-        HomeCardButton(configuration: configuration)
+        HomeCardButton(configuration: configuration, isQuiet: isQuiet)
     }
 }
 
 private struct HomeCardButton: View {
     let configuration: ButtonStyleConfiguration
+    let isQuiet: Bool
     @State private var isHovered = false
 
     var body: some View {
         configuration.label
+            .opacity(isQuiet && !isHovered ? HomeCardStyle.quietOpacity : 1)
             .homeCardFrame(fill: configuration.isPressed ? HomeCardStyle.pressedFill
-                           : isHovered ? HomeCardStyle.hoveredFill : HomeCardStyle.fill)
+                           : isHovered ? HomeCardStyle.hoveredFill
+                           : isQuiet ? HomeCardStyle.quietFill : HomeCardStyle.fill)
             .contentShape(.rect(cornerRadius: HomeCardStyle.cornerRadius, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .onHover { isHovered = $0 }

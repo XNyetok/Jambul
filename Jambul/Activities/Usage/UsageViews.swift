@@ -142,7 +142,8 @@ struct UsageTab: View {
 
     var body: some View {
         let providers = activity.enabled
-        HStack(spacing: 14) {
+        // From the top, so a subscription with fewer limits keeps its logo and name in line with the others'.
+        HStack(alignment: .top, spacing: 14) {
             if providers.isEmpty {
                 Text("Turn on a subscription in Settings")
                     .font(.system(size: 13, weight: .medium))

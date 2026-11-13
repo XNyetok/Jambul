@@ -22,6 +22,7 @@ final class KeepAwakeActivity: IslandActivity {
     var isLive: Bool { since != nil }
     var tint: Color { .cyan }
     var tabSymbol: String { "eye.fill" }
+    var homeCardIsQuiet: Bool { !isOn }
 
     /// When it was turned on; nil while off.
     private(set) var since: Date?

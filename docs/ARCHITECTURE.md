@@ -20,7 +20,7 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 - The open island shows one activity's `tab` at a time, with the tabs split between the two sides of the camera, the extra one on the left (`IslandLayout.tabSides`). Each side lines up with the edge of the content below it. An activity without one, like the battery or the debug demo, gets no tab. With more tabs than fit on a side at full width, each narrows to fit, and the island keeps its size (`IslandLayout.tabButtonWidth`).
 - Home (`HomeActivity`), registered first, is the first tab: one card for each activity with a `homeCard`, laid out by `HomeCardContent`. A click on a card opens that activity's tab. An activity can keep its card off Home while it has nothing to say (`showsHomeCard`), like the battery before its first reading.
 - The island first opens on Home, and from then on on the tab it showed last. Only a click changes the tab, on a tab or on a card on Home; activities starting, running or ending leave it where it is, since what's live already shows beside the notch. Nothing is remembered across launches, so each launch starts on Home.
-- Each activity has a `tint` for its glyphs, tab and buttons.
+- Each activity has a `tint` for its glyphs and buttons. Its tab's symbol takes color only while something is going on (`tabTint`), and a card on Home dims while its activity is off (`homeCardIsQuiet`).
 - While a full-screen app hides the menu bar, the open island shows the day and time right below the camera, a row taller so a tab keeps its room (`IslandLayout.clockRowHeight`).
 
 ## Peeks
