@@ -17,7 +17,7 @@ Jambul turns the notch into a living island. Hover over it to open it, move away
 - **Settings:** open at login, hover speed, haptic taps, the timer's sound, Claude Code's sessions, and which usage limits to show. Reduce Motion is respected.
 
 ## Requirements
-- macOS 14 Sonoma or later.
+- macOS 27 or later.
 - Made for MacBooks with a notch. On other screens the island appears when you move the pointer to the top center.
 
 ## Install
