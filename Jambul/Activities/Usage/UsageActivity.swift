@@ -29,6 +29,8 @@ final class UsageActivity: IslandActivity {
         return fullest >= 0.95 ? .red : fullest >= 0.8 ? .yellow : nil
     }
     var priority: ActivityPriority { .low }
+    /// Its logo.
+    var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight }
 
     /// The subscriptions the owner turned on, in the order the tab shows them.
     var enabled: [UsageProvider] = [] {

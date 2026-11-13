@@ -71,8 +71,10 @@ final class IslandPanelFitter {
     var restingFrame: CGRect {
         let layout = model.layout
         guard model.presentation != .idle, model.presentation != .expanded else { return canvas }
-        let size = CGSize(width: layout.size.width.rounded(.up), height: layout.size.height.rounded(.up))
-        return geometry.panelFrame(size: size)
+        // Around the island wherever it sits, which needn't be centered on the notch.
+        let canvas = self.canvas, island = layout.frame(hangingFrom: canvas)
+        let left = island.minX.rounded(.down), height = island.height.rounded(.up)
+        return CGRect(x: left, y: canvas.maxY - height, width: island.maxX.rounded(.up) - left, height: height)
     }
 
     /// Lays the panel out on `geometry`, as at launch and when the screens change.

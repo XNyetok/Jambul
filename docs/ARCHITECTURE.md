@@ -62,6 +62,7 @@ Anything due while the Mac sleeps waits for `NSWorkspace.didWakeNotification` be
 
 ## Geometry
 - The notch can sit on a half point (x = 645.5 on a 13-inch MacBook Air), while AppKit snaps window origins down to whole points. So panels are framed on whole points, and the notch shape is placed inside them (`NotchGeometry.panelFrame`, `hotZoneFrame`).
+- Beside the notch, each side of the island is as wide as what it holds (`compactLeadingWidth`, `compactSlotWidth`), so its content sits close to the camera and the island's middle can sit off the notch's (`IslandLayout.xOffset`). A peek and the open island are centered.
 - The compact island is as tall as the menu bar band (33 pt on that MacBook Air). The band hides the camera housing, and full-screen windows start right below it (measured: y = 33), so the island never covers them.
 - Its content sits as far from the drawn sides as from the top and bottom (8.5 pt there), as Apple asks for in the Dynamic Island. The top flares make the drawn body 6 pt narrower than the frame on each side, so margins are measured from the drawn edge (`IslandLayout.compactMargin`).
 

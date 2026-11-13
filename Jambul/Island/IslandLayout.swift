@@ -1,4 +1,4 @@
-import CoreGraphics
+import SwiftUI
 
 /// Size and corner radii of the island for each presentation.
 struct IslandLayout {
@@ -45,6 +45,14 @@ struct IslandLayout {
         ((count + 1) / 2, count / 2)
     }
 
+    /// The glyph on the left of a one-row tab, like the timer's ring: large enough to fill the room below the notch,
+    /// which a 44 pt glyph left half empty.
+    static let tabGlyphHeight: CGFloat = 56
+    static let tabRingWidth: CGFloat = 6
+    /// A one-row tab's name and the line under it.
+    static let tabTitleFont = Font.system(size: 15, weight: .semibold)
+    static let tabDetailFont = Font.system(size: 12, weight: .medium)
+
     /// Each tab's button beside the notch, and the highlight behind the chosen one, as wide as it gets
     /// (`tabButtonWidth`).
     static let tabButtonSize = CGSize(width: 30, height: 24)
@@ -80,19 +88,26 @@ struct IslandLayout {
     let size: CGSize
     let topRadius: CGFloat
     let bottomRadius: CGFloat
+    /// How far right of the notch's middle the island's own middle sits: half of what the right slot is wider than the
+    /// left by, beside the notch; nothing for a peek or the open island.
+    var xOffset: CGFloat = 0
 
     /// A peek's second line (`Peek.subtitle`) makes it this much taller.
     static let peekSubtitleHeight: CGFloat = 16
 
     /// - Parameters:
-    ///   - compactSlotWidth: The width of each slot beside the notch, or `nil` when nothing is live.
+    ///   - compactSlotWidth: The width of the slot right of the notch, or `nil` when nothing is live.
+    ///   - compactLeadingWidth: The width of the slot left of it, or `nil` for the same.
     ///   - peekHasSubtitle: Whether the peek showing has a second line.
     ///   - showsClock: Whether the open island shows the day and time below the camera.
     init(_ presentation: IslandPresentation, notch: NotchMetrics, compactSlotWidth: CGFloat?,
-         peekHasSubtitle: Bool = false, showsClock: Bool = false) {
+         compactLeadingWidth: CGFloat? = nil, peekHasSubtitle: Bool = false, showsClock: Bool = false) {
+        let leading = compactLeadingWidth ?? compactSlotWidth
         let resting = compactSlotWidth.map {
-            CGSize(width: notch.size.width + 2 * ($0 + Self.compactInset(notch)), height: notch.compactHeight)
+            CGSize(width: notch.size.width + $0 + (leading ?? $0) + 2 * Self.compactInset(notch),
+                   height: notch.compactHeight)
         } ?? notch.size
+        let offset = compactSlotWidth.map { ($0 - (leading ?? $0)) / 2 } ?? 0
         switch presentation {
         case .idle:
             // Without a notch to hide behind, the idle island folds away into the top edge.
@@ -100,9 +115,11 @@ struct IslandLayout {
             self.init(size: size, topRadius: 0, bottomRadius: Self.notchCornerRadius)
         case .compact:
             self.init(size: resting, topRadius: Self.compactTopRadius, bottomRadius: 14)
+            xOffset = offset
         case .lifted:
             self.init(size: CGSize(width: resting.width + 24, height: resting.height + 6), topRadius: Self.compactTopRadius,
                       bottomRadius: 14)
+            xOffset = offset
         case .peek:
             let subtitle = peekHasSubtitle ? Self.peekSubtitleHeight : 0
             self.init(size: CGSize(width: max(340, resting.width), height: notch.size.height + 38 + subtitle),
@@ -112,9 +129,9 @@ struct IslandLayout {
         }
     }
 
-    /// Where the island sits on screen: hanging from the top of its panel, centered on it.
+    /// Where the island sits on screen: hanging from the top of its panel, `xOffset` right of its middle.
     func frame(hangingFrom panel: CGRect) -> CGRect {
-        CGRect(x: panel.midX - size.width / 2, y: panel.maxY - size.height, width: size.width, height: size.height)
+        CGRect(x: panel.midX + xOffset - size.width / 2, y: panel.maxY - size.height, width: size.width, height: size.height)
     }
 
     private init(size: CGSize, topRadius: CGFloat, bottomRadius: CGFloat) {

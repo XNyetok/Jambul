@@ -281,12 +281,46 @@ private struct PresentationDrawing: View {
     }
 }
 
+extension IslandPanelFitterTests {
+    /// With sides of different widths the island sits off the notch's middle, and its panel at rest follows it: the
+    /// panel is what takes its clicks.
+    @Test func thePanelAtRestCoversAnIslandWithSidesOfDifferentWidths() {
+        let timer = TimerActivity(activities: activities, keepsMacAwake: false)
+        activities.register(timer)
+        timer.start(.seconds(300))
+        defer { timer.stop() }
+        let model = IslandModel(notch: geometry.metrics, activities: activities)
+        let fitter = makeFitter(for: model)
+        #expect(model.layout.xOffset == 13)
+        let island = model.layout.frame(hangingFrom: fitter.canvas)
+        #expect(fitter.restingFrame.contains(island), "\(fitter.restingFrame) leaves part of \(island) out")
+        #expect(fitter.restingFrame.width <= island.width + 1)
+    }
+
+    /// Sides an odd number of points apart put the island on a half point; the panel still covers all of it.
+    @Test func thePanelAtRestCoversAnIslandOnAHalfPoint() {
+        activities.register(TestActivity(isLive: true, compactSlotWidth: 41))
+        let leading = WideningActivity()
+        leading.compactSlotWidth = 16
+        leading.priority = .low
+        activities.register(leading)
+        let model = IslandModel(notch: geometry.metrics, activities: activities)
+        let fitter = makeFitter(for: model)
+        #expect(model.layout.xOffset == 12.5)
+        let island = model.layout.frame(hangingFrom: fitter.canvas)
+        let frame = fitter.restingFrame
+        #expect(frame.contains(island), "\(frame) leaves part of \(island) out")
+        #expect(frame.minX == frame.minX.rounded() && frame.width == frame.width.rounded())
+    }
+}
+
 /// A live activity whose slot beside the notch can widen by itself, as a countdown passing an hour might.
 @MainActor
 @Observable
 private final class WideningActivity: IslandActivity {
     let id = "widening"
     let isLive = true
+    var priority = ActivityPriority.normal
     var compactSlotWidth: CGFloat = 36
 
     var compactLeading: some View { EmptyView() }

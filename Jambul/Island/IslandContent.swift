@@ -1,11 +1,13 @@
 import SwiftUI
 
 /// The live activities beside the notch: leading slot, a gap for the notch itself, trailing slot. Alone, an activity
-/// takes both slots; with two, the more important one keeps the right, and the other shows its glyph on the left.
+/// takes both slots; with two, the more important one keeps the right, and the other shows its glyph on the left. Each
+/// slot is as wide as what it holds, so both sit close to the notch.
 struct CompactContent: View {
     /// The most important first; only the first two show.
     let activities: [any IslandActivity]
     let notch: NotchMetrics
+    let leadingWidth: CGFloat
     let slotWidth: CGFloat
 
     var body: some View {
@@ -16,7 +18,7 @@ struct CompactContent: View {
                     .id(leadingID)
                     .transition(Motion.contentTransition)
             }
-            .frame(width: slotWidth, alignment: .leading)
+            .frame(width: leadingWidth, alignment: .leading)
             Color.clear
                 .frame(width: notch.size.width)
             ZStack(alignment: .trailing) {

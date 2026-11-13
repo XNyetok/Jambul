@@ -16,10 +16,10 @@ struct IslandView: View {
             // Clipped, so content never draws outside the island while it morphs.
             ZStack(alignment: .top) {
                 let compact = model.compactActivities
-                if !compact.isEmpty, let slotWidth = model.compactSlotWidth,
+                if !compact.isEmpty, let slotWidth = model.compactSlotWidth, let leadingWidth = model.compactLeadingWidth,
                    presentation == .compact || presentation == .lifted {
                     // Each slot changes on its own (`CompactContent`), so a countdown that stays holds still.
-                    CompactContent(activities: compact, notch: notch, slotWidth: slotWidth)
+                    CompactContent(activities: compact, notch: notch, leadingWidth: leadingWidth, slotWidth: slotWidth)
                         .transition(Motion.contentTransition)
                 }
                 if presentation == .peek, let peek = model.peek {
@@ -45,6 +45,7 @@ struct IslandView: View {
         .contentShape(shape)
         .onHover { model.pointer(.island, isInside: $0) }
         .onTapGesture { model.clicked() }
+        .offset(x: layout.xOffset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
     }
