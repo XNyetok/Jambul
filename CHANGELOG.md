@@ -10,6 +10,7 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 ### Fixed
 - Clicks below and beside the island now reach the app underneath while something shows beside the notch, like a running timer.
 - When Jambul starts with something already beside the notch, hovering or clicking the island there works right away.
+- Claude's usage now follows when a limit is handed back before its window ends, instead of holding the old, higher number until the reset.
 
 ## [0.2.0] - 2026-11-02
 Usage limits for your AI subscriptions, and Home.

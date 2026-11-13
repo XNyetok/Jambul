@@ -137,6 +137,65 @@ struct UsageActivityTests {
         #expect(usage.readings[.claude]?.windows.first?.used == 0.05)
     }
 
+    /// A provider can hand usage back before the window ends.
+    @Test func aCurrentNumberCanDropWithinAWindow() throws {
+        let usage = makeUsage()
+        usage.record(claude(0.97))
+        usage.peekWasShown(try #require(log.peeks.last))
+        #expect(usage.isLive)
+        usage.record(claude(0.13))
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
+        #expect(!usage.isLive)
+        // Two sessions at work still don't flicker, whatever the rounding.
+        usage.record(claude(0.11))
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
+        usage.record(claude(0.10))
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.10)
+        // Climbing back is news again, and a window that doesn't end high isn't "back".
+        usage.record(claude(0.96))
+        #expect(log.peeks.count == 2)
+        usage.record(claude(0.13))
+        clock.now = clock.now.addingTimeInterval(3_601)
+        usage.checkResets()
+        #expect(log.peeks.count == 2)
+    }
+
+    /// An idle Claude Code session repeats the limits it last heard, for hours.
+    @Test func aSessionRepeatingOldNumbersChangesNothing() {
+        let usage = makeUsage()
+        usage.record(claude(0.97), isCurrent: false)
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.97)
+        usage.record(claude(0.13))
+        usage.record(claude(0.97), isCurrent: false)
+        usage.record(claude(0.05), isCurrent: false)
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
+        #expect(log.peeks.count == 1)
+        // Nor does it bring back a window that came before this one.
+        usage.record(claude(0.99, resetsIn: -3_600), isCurrent: false)
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
+        // The next window is news from anyone.
+        usage.record(claude(0.02, resetsIn: 6 * 3_600), isCurrent: false)
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.02)
+    }
+
+    @Test func aWarningThatWaitedThroughADropIsNotRecorded() throws {
+        let usage = makeUsage()
+        usage.record(claude(0.97))
+        let waiting = try #require(log.peeks.last)
+        usage.record(claude(0.13))
+        usage.peekWasShown(waiting)
+        clock.now = clock.now.addingTimeInterval(3_601)
+        usage.checkResets()
+        #expect(log.peeks.count == 1)
+    }
+
+    @Test func aSessionsLimitsAreCurrentOnceItsRequestTimeGrows() {
+        let usage = makeUsage()
+        #expect(!usage.noteClaudeRequestTime(1_000, session: "a"))
+        #expect(!usage.noteClaudeRequestTime(1_000, session: "a"))
+        #expect(usage.noteClaudeRequestTime(1_500, session: "a"))
+    }
+
     @Test func theNumbersAndWarningsSurviveARelaunch() throws {
         let suiteName = "JambulTests.Usage"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
