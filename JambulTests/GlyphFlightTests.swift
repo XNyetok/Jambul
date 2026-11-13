@@ -87,8 +87,8 @@ final class GlyphFlightTests {
     private var bytesPerRow = 1
     private var bytesPerPixel = 4
 
-    /// A drawing averaged over blocks of four by four pixels, each color apart. A glyph drawn half a pixel off changes a
-    /// block by 32 at most; one that is missing, doubled or elsewhere changes blocks by far more.
+    /// A drawing averaged over blocks of four by four pixels, each color apart. The paused timer's ring is drawn at half
+    /// strength, so a whole pixel off changes a block by about 32, and a ring that is missing or doubled by far more.
     private func blocks(of pixels: [UInt8]) -> [UInt8] {
         let width = bytesPerRow / bytesPerPixel, height = pixels.count / bytesPerRow
         var blocks = [UInt8]()
@@ -106,7 +106,7 @@ final class GlyphFlightTests {
         return blocks
     }
 
-    /// Whether two drawings are alike but for a glyph half a pixel off.
+    /// Whether two drawings are alike but for a glyph a pixel off.
     private func areAlikeInBlocks(_ one: [UInt8], _ other: [UInt8]) -> Bool {
         zip(blocks(of: one), blocks(of: other)).allSatisfy { abs(Int($0) - Int($1)) <= 48 }
     }
@@ -129,6 +129,12 @@ final class GlyphFlightTests {
             }
             try await Task.sleep(for: .milliseconds(20))
         }
+    }
+
+    /// Whether anything but black is drawn: some color value clearly above none, leaving out each pixel's opacity, which
+    /// is full all over the island.
+    private func drawsSomething(_ pixels: [UInt8]) -> Bool {
+        pixels.enumerated().contains { $0.offset % bytesPerPixel < 3 && $0.element > 100 }
     }
 
     /// How many color values differ clearly between two drawings of the island.
@@ -207,12 +213,12 @@ final class GlyphFlightTests {
         model.clicked()
         #expect(model.selectedTab == timer.id)
         try await waitUntilDrawnAlike(opened, alwaysOpen)
-        #expect(try pixels(of: opened).contains { $0 > 200 })
+        #expect(try drawsSomething(pixels(of: opened)))
     }
 
     /// Closed again, the island is drawn as its content alone: the glyph is back in its slot. Compared in blocks of
-    /// pixels: on a display with one pixel per point, as CI's is, a glyph that has flown back is drawn half a pixel
-    /// softer than one that never left, where every pixel matches on a Retina display.
+    /// pixels: on a display with one pixel per point, as CI's is, a glyph that has flown back ends a pixel away from
+    /// one that never left, where every pixel matches on a Retina display.
     @Test func onceClosedTheGlyphIsBackBesideTheNotch() async throws {
         let timer = registerWithAPausedTimer()
         defer { timer.stop() }
@@ -227,7 +233,7 @@ final class GlyphFlightTests {
         #expect(model.presentation == .compact)
         try await waitUntilDrawnAlike(closed, neverOpened, toThePixel: false)
         // And something is drawn there at all: the ring, in the timer's color.
-        #expect(try pixels(of: closed).contains { $0 > 200 })
+        #expect(try drawsSomething(pixels(of: closed)))
     }
 
     /// A glyph narrower than its slot sits at the slot's left edge, as it does drawn as plain content.
@@ -238,7 +244,7 @@ final class GlyphFlightTests {
         let model = IslandModel(notch: notch, activities: activities)
         let island = host(model), plain = hostAtRest(model)
         try await waitUntilDrawnAlike(island, plain)
-        #expect(try pixels(of: island).contains { $0 > 200 })
+        #expect(try drawsSomething(pixels(of: island)))
     }
 }
 
