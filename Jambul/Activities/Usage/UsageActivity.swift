@@ -16,6 +16,8 @@ final class UsageActivity: IslandActivity {
     static let urgentPeekDuration = BatteryActivity.lowPeekDuration
     /// Claude Code updates its status line while it works; this long without one, it has stopped.
     static let claudeWorkingFor: TimeInterval = 20
+    /// How many percentage points apart two sessions' numbers for the same window can be while both are right.
+    static let flickerPoints = 2.0
 
     let id = "usage"
     var title: String { String(localized: "Usage") }
@@ -91,10 +93,13 @@ final class UsageActivity: IslandActivity {
     }
 
     /// Claude Code's status line also comes on a timer, so only a session's request time growing means it's working.
-    func noteClaudeRequestTime(_ milliseconds: Double, session: String) {
+    /// Returns whether it grew: the session then just heard from Claude, and the limits it sends are current.
+    @discardableResult
+    func noteClaudeRequestTime(_ milliseconds: Double, session: String) -> Bool {
         defer { claudeRequestTime[session] = milliseconds }
-        guard let before = claudeRequestTime[session], milliseconds > before else { return }
+        guard let before = claudeRequestTime[session], milliseconds > before else { return false }
         claudeWorkingAt = now()
+        return true
     }
 
     /// The time, for views: they read it after a reset moves `resetCount` on.
@@ -103,14 +108,24 @@ final class UsageActivity: IslandActivity {
         return now()
     }
 
-    func record(_ newReading: UsageReading) {
-        let reading = Self.keepingHigher(newReading, than: readings[newReading.provider])
+    /// - Parameter isCurrent: Whether the numbers were just heard from the provider, as opposed to a Claude Code
+    ///   session repeating what it heard a while ago.
+    func record(_ newReading: UsageReading, isCurrent: Bool = true) {
+        let reading = Self.settled(newReading, after: readings[newReading.provider], isCurrent: isCurrent)
         if problems[reading.provider] != nil { problems[reading.provider] = nil }
         // Claude Code updates its status line many times a minute while it works, mostly with the same numbers; those
         // change nothing, so nothing is saved and nothing redraws.
         guard readings[reading.provider]?.windows != reading.windows else { return }
         readings[reading.provider] = reading
         save()
+        if alerts.forgetLevels(above: reading) { saveAlerts() }
+        // A warning still waiting for the island is no longer true once its window reads lower.
+        waitingAlerts = waitingAlerts.filter { _, alert in
+            alert.provider != reading.provider || !reading.windows.contains {
+                $0.id == alert.windowID && $0.resetsAt != nil
+                    && UsageAlerts.isSameWindow($0.resetsAt, alert.resetsAt) && $0.used < alert.used
+            }
+        }
         Logger.activities.notice("""
             usage: \(reading.provider.rawValue, privacy: .public) \
             \(reading.windows.map { "\($0.label) \(Int(($0.used * 100).rounded()))%" }.joined(separator: ", "), privacy: .public)
@@ -125,16 +140,26 @@ final class UsageActivity: IslandActivity {
         scheduleNextReset()
     }
 
-    /// Within one window, usage only grows until it starts over. Each Claude Code session reports the limits it last
-    /// heard, so two can disagree by a point and the number would flicker between them; the higher one stands.
-    static func keepingHigher(_ reading: UsageReading, than previous: UsageReading?) -> UsageReading {
+    /// Settles a new reading against the last one, window by window.
+    ///
+    /// Each Claude Code session repeats the limits it last heard, on a timer too, so one that sits idle sends old
+    /// numbers for hours. A reading that isn't current therefore changes nothing in a window Jambul already knows, and
+    /// only brings a window that ends later. Two sessions at work can still be a point or two apart, so a current
+    /// number only drops once it is lower by more than `flickerPoints`: a provider can hand usage back before the
+    /// window ends.
+    static func settled(_ reading: UsageReading, after previous: UsageReading?, isCurrent: Bool = true) -> UsageReading {
         guard let previous else { return reading }
         var kept = reading
         kept.windows = reading.windows.map { window in
             // Without a reset time there's no telling one window from the next, so the new number stands.
             guard let old = previous.windows.first(where: { $0.id == window.id }),
-                  old.resetsAt != nil, window.resetsAt != nil,
-                  UsageAlerts.isSameWindow(old.resetsAt, window.resetsAt), old.used > window.used else { return window }
+                  let oldReset = old.resetsAt, let reset = window.resetsAt else { return window }
+            guard UsageAlerts.isSameWindow(oldReset, reset) else {
+                return !isCurrent && reset < oldReset ? old : window
+            }
+            guard isCurrent else { return old }
+            let drop = (old.used * 100).rounded() - (window.used * 100).rounded()
+            guard drop > 0, drop <= flickerPoints else { return window }
             var higher = window
             higher.used = old.used
             return higher

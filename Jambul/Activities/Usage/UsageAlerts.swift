@@ -84,6 +84,25 @@ struct UsageAlerts: Codable, Equatable, Sendable {
         records[key] = record
     }
 
+    /// Forgets the levels a window has shown that its usage is now below, as when a provider hands usage back before
+    /// the window ends: they are news again once it climbs back, and "back" is only for a window that ended high.
+    /// Returns whether anything changed.
+    mutating func forgetLevels(above reading: UsageReading) -> Bool {
+        var changed = false
+        for window in reading.windows {
+            let key = Self.key(reading.provider, window.id)
+            // Without a reset time a dip may just be the next window.
+            guard var record = records[key], window.resetsAt != nil,
+                  Self.isSameWindow(record.resetsAt, window.resetsAt) else { continue }
+            let passed = Self.warningLevels.filter { window.used < $0.fraction }.map(\.kind)
+            guard !record.shown.isDisjoint(with: passed) else { continue }
+            record.shown.subtract(passed)
+            records[key] = record
+            changed = true
+        }
+        return changed
+    }
+
     /// Forgets windows that started over long ago.
     mutating func forgetOld(at now: Date) {
         records = records.filter { _, record in
