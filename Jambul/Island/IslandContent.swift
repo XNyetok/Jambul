@@ -159,6 +159,7 @@ private struct PeekEye: View {
     let tint: Color
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var felt = false
+    @State private var shakes = 0
 
     var body: some View {
         ZStack {
@@ -178,9 +179,17 @@ private struct PeekEye: View {
         .rotationEffect(.degrees(felt && !isHappy ? Motion.Agent.sadTilt : 0))
         .offset(y: felt && !isHappy ? Motion.Agent.sadDrop : 0)
         .frame(width: 22, height: 18)
+        .phaseAnimator(isHappy || reduceMotion ? [0] : Motion.Agent.shakeOffsets, trigger: shakes) { content, x in
+            content.offset(x: x)
+        } animation: { _ in Motion.Agent.shake }
         .onAppear {
             guard !reduceMotion else { return felt = true }
-            withAnimation(Motion.Agent.feel) { felt = true }
+            withAnimation(isHappy ? Motion.Agent.feel : Motion.Agent.droop) { felt = true }
+        }
+        .task {
+            guard !isHappy, !reduceMotion else { return }
+            try? await Task.sleep(for: Motion.Agent.shakeAfter)
+            if !Task.isCancelled { shakes += 1 }
         }
     }
 }

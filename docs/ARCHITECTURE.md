@@ -33,7 +33,7 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 ## Motion and drawing
 - Every animation parameter lives in `Island/Motion.swift`. Views don't define their own springs.
 - Always-on ambient animations (visualizers, pulses) use Core Animation rather than repeating SwiftUI animations; on a MacBook Air that measured about 8–10× less CPU. Core Animation moves the cost rather than removing it, though: a continuous animation still cost WindowServer about 16 CPU points.
-- Displays that change slowly, like the timer's countdown, redraw once a second with `TimelineView(.periodic)` and no animation (about 0.35% CPU). Rolling digits and `ProgressView(timerInterval:)` both drew at 60 fps.
+- Displays that change slowly, like the timer's countdown, redraw once a second with `TimelineView(.periodic)` and no animation (about 0.35% CPU). Rolling digits and `ProgressView(timerInterval:)` both drew at 60 fps. A number that only changes now and then, like a usage percentage or the battery's charge, does roll as it changes (`Motion.numberTransition`).
 - Keep Awake's eye and laptop move on one shared beat (`KeepAwakeBeat`), so Jambul wakes once for both.
 - Views that redraw by themselves hold still while nobody can see the island (`IslandModel.isVisible`).
 
@@ -54,6 +54,7 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 - `AgentActivity` keeps each session in memory: working, waiting on the owner (a permission or a question), done, failed or stopped. It sits beside the notch while a session works, ahead of everything else while one waits on the owner.
 - Claude Code runs no hook when a turn is stopped with Esc. A session quiet mid-turn has the end of its transcript read a minute later, and every few minutes while it stays quiet; Esc leaves "[Request interrupted by user" there. A working session quiet in its hooks and its transcript for 20 minutes counts as stopped. A session waiting on the owner never goes stale.
 - "Needs you" must be seen, and is taken back while it waits (`ActivityCenter.withdrawPeeks`) once the request is answered in the terminal. "Done" stays quiet for a turn under a minute that the owner watched in its terminal, and while another session waits on the owner.
+- In the open island a working session's ring turns a step every 2 s, on the beat Claude's logo steps on (`Motion.Usage.untilNextBeat`).
 - Keep Awake can stay on until the last working session finishes (`KeepAwakeActivity.agentsFinished`).
 - Nothing about sessions is saved; the log only records changes of state, never what an agent said or which files it touched.
 

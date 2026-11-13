@@ -77,7 +77,10 @@ private struct UsageCompactValue: View {
                     label(UsageActivity.countdown(resetsAt.timeIntervalSince(context.date)))
                 }
             } else {
+                // Only the percentage rolls: the countdown changes by itself each minute, for hours.
                 label(UsageActivity.percentText(window.used))
+                    .contentTransition(Motion.numberTransition(value: window.used))
+                    .animation(Motion.valueChange, value: window.used)
             }
         }
     }
@@ -128,6 +131,8 @@ private struct UsageHomeCard: View {
         if let used = activity.readings[provider]?.fullest(at: now)?.used(at: now) {
             Text(UsageActivity.percentText(used))
                 .foregroundStyle(used >= 0.8 ? UsageActivity.color(for: used, provider: provider) : .white)
+                .contentTransition(Motion.numberTransition(value: used))
+                .animation(Motion.valueChange, value: UsageActivity.percentText(used))
         } else {
             Text(verbatim: "—")
                 .foregroundStyle(.secondary)
@@ -193,6 +198,8 @@ private struct UsageColumn: View {
                         .font(.system(size: 20, weight: .semibold, design: .rounded))
                         .foregroundStyle(used >= 0.8 ? UsageActivity.color(for: used, provider: provider) : .white)
                         .monospacedDigit()
+                        .contentTransition(Motion.numberTransition(value: used))
+                        .animation(Motion.valueChange, value: UsageActivity.percentText(used))
                         .offset(y: appeared || reduceMotion ? 0 : Motion.Usage.riseFrom)
                         .opacity(appeared ? 1 : 0)
                 }
@@ -210,7 +217,7 @@ private struct UsageColumn: View {
         .task(id: turnsWhileWorking) {
             guard turnsWhileWorking else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Motion.Usage.workingBeat))
+                try? await Task.sleep(for: Motion.Usage.untilNextBeat())
                 if activity.isClaudeWorking {
                     withAnimation(Motion.Usage.workingStep) { workingTurns += 1 }
                 }
@@ -293,6 +300,7 @@ private struct UsageBar: View {
                             .fill(color)
                             .frame(width: proxy.size.width * (shown ? max(used, 0.03) : 0))
                             .animation(Motion.Usage.fill.delay(delay), value: shown)
+                            .animation(Motion.valueChange, value: used)
                     }
             }
             .frame(height: 4)
@@ -300,6 +308,8 @@ private struct UsageBar: View {
                 .frame(width: 28, alignment: .trailing)
                 .foregroundStyle(used >= 0.8 ? color : .secondary)
                 .monospacedDigit()
+                .contentTransition(Motion.numberTransition(value: used))
+                .animation(Motion.valueChange, value: UsageActivity.percentText(used))
         }
         .font(.system(size: 10, weight: .semibold))
         .accessibilityElement(children: .combine)

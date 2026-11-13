@@ -18,13 +18,18 @@ extension AgentActivity {
 private struct AgentCompactValue: View {
     let activity: AgentActivity
     @Environment(\.islandIsVisible) private var isVisible
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var raised = 0
 
     var body: some View {
         if let session = activity.liveSession {
             if session.needsYou {
+                // The hand bounces once as it comes up, and then holds still.
                 Image(systemName: "hand.raised.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.yellow)
+                    .symbolEffect(.bounce, options: .nonRepeating, value: raised)
+                    .onAppear { if !reduceMotion { raised += 1 } }
             } else if let started = session.turnStartedAt {
                 // Once a minute, and only while someone can see it. A second past each whole minute, so the minute
                 // rounded up has turned over.
@@ -41,22 +46,54 @@ private struct AgentCompactValue: View {
     }
 }
 
-/// A session's state at a glance, in a circle: a check when done, half a ring while working, a raised hand while it
-/// waits on the owner, an exclamation mark when it failed. Nothing in it moves.
+/// A session's state at a glance, in a circle: a check when done, a third of a ring while working, a raised hand while it
+/// waits on the owner, an exclamation mark when it failed. The working ring turns a step on each beat while someone can
+/// see it, so it reads as busy rather than as a level; one state gives way to the next in a blur.
 struct AgentStatusCircle: View {
     let state: AgentSession.State
     let tint: Color
     var size: CGFloat = 24
+    @Environment(\.islandIsVisible) private var isVisible
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var steps = 0
+
+    private var turns: Bool { state == .working && isVisible && !reduceMotion }
 
     var body: some View {
+        face
+            .id(kind)
+            .transition(Motion.glyphSwap)
+            .animation(Motion.valueChange, value: kind)
+            .task(id: turns) {
+                guard turns else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: Motion.Usage.untilNextBeat())
+                    guard !Task.isCancelled else { return }
+                    withAnimation(Motion.Usage.workingStep) { steps += 1 }
+                }
+            }
+    }
+
+    /// What is drawn, by state: asking and needing permission differ only in the symbol.
+    private var kind: Int {
+        switch state {
+        case .working: 0
+        case .needsYou(let isQuestion): isQuestion ? 1 : 2
+        case .done: 3
+        case .failed: 4
+        case .stopped, .ready: 5
+        }
+    }
+
+    private var face: some View {
         ZStack {
             switch state {
             case .working:
                 Circle().stroke(.white.opacity(0.16), lineWidth: 2.5)
                 Circle()
-                    .trim(from: 0, to: 0.5)
+                    .trim(from: 0, to: 0.3)
                     .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
+                    .rotationEffect(.degrees(-90 + Double(steps) * Motion.Agent.workingStepAngle))
             case .needsYou(let isQuestion):
                 Circle().fill(.yellow)
                 symbol(isQuestion ? "questionmark" : "hand.raised.fill")
