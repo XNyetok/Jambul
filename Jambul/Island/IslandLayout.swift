@@ -30,6 +30,21 @@ struct IslandLayout {
     /// Space between the notch and the tab's content, which is centered in what is left below the notch.
     static let expandedContentTopGap: CGFloat = 6
     static let expandedContentBottomInset: CGFloat = 12
+    /// While a full-screen app hides the menu bar, the open island is this much taller, for the day and time right
+    /// below the camera, so the room for a tab's content stays the same.
+    static let clockRowHeight: CGFloat = 18
+
+    /// The open island's size, a row taller with the clock below the camera.
+    static func expandedSize(showsClock: Bool) -> CGSize {
+        CGSize(width: expandedSize.width, height: expandedSize.height + (showsClock ? clockRowHeight : 0))
+    }
+
+    /// How many tabs sit on each side of the camera: half on each, the extra one on the left, so neither side crowds
+    /// and both line up with the edges of the content below.
+    static func tabSides(count: Int) -> (leading: Int, trailing: Int) {
+        ((count + 1) / 2, count / 2)
+    }
+
     /// Each tab's button beside the notch, and the highlight behind the chosen one, as wide as it gets
     /// (`tabButtonWidth`).
     static let tabButtonSize = CGSize(width: 30, height: 24)
@@ -42,15 +57,15 @@ struct IslandLayout {
         expandedSize.height - notch.size.height - expandedContentTopGap - expandedContentBottomInset
     }
 
-    /// Room on either side of the notch in the open island, for the tabs on the left and the clock on the right:
-    /// 106.5 pt beside the MacBook Air's 179 pt notch.
+    /// Room on either side of the notch in the open island, for the tabs: 106.5 pt beside the MacBook Air's 179 pt
+    /// notch.
     static func besideNotchRoom(_ notch: NotchMetrics) -> CGFloat {
         (expandedSize.width - notch.size.width) / 2 - expandedContentInset - besideNotchGap
     }
 
-    /// Each tab button's width: `tabButtonSize` while the tabs fit beside the notch at that width, narrower once there
-    /// are more than fit, and on whole points. Four take 25 pt each beside the MacBook Air's notch, where 30 would need
-    /// 126 pt of the 106.5 there; the island keeps its size.
+    /// Each tab button's width, for `count` tabs on one side of the notch: `tabButtonSize` while they fit there at that
+    /// width, narrower once there are more than fit, and on whole points. Three keep 30 pt beside the MacBook Air's
+    /// notch; four would take 25 pt each, where 30 would need 126 pt of the 106.5 there. The island keeps its size.
     static func tabButtonWidth(count: Int, notch: NotchMetrics) -> CGFloat {
         guard count > 0 else { return tabButtonSize.width }
         let room = besideNotchRoom(notch) - CGFloat(count - 1) * tabButtonSpacing
@@ -66,8 +81,15 @@ struct IslandLayout {
     let topRadius: CGFloat
     let bottomRadius: CGFloat
 
-    /// - Parameter compactSlotWidth: The width of each slot beside the notch, or `nil` when nothing is live.
-    init(_ presentation: IslandPresentation, notch: NotchMetrics, compactSlotWidth: CGFloat?) {
+    /// A peek's second line (`Peek.subtitle`) makes it this much taller.
+    static let peekSubtitleHeight: CGFloat = 16
+
+    /// - Parameters:
+    ///   - compactSlotWidth: The width of each slot beside the notch, or `nil` when nothing is live.
+    ///   - peekHasSubtitle: Whether the peek showing has a second line.
+    ///   - showsClock: Whether the open island shows the day and time below the camera.
+    init(_ presentation: IslandPresentation, notch: NotchMetrics, compactSlotWidth: CGFloat?,
+         peekHasSubtitle: Bool = false, showsClock: Bool = false) {
         let resting = compactSlotWidth.map {
             CGSize(width: notch.size.width + 2 * ($0 + Self.compactInset(notch)), height: notch.compactHeight)
         } ?? notch.size
@@ -82,10 +104,11 @@ struct IslandLayout {
             self.init(size: CGSize(width: resting.width + 24, height: resting.height + 6), topRadius: Self.compactTopRadius,
                       bottomRadius: 14)
         case .peek:
-            self.init(size: CGSize(width: max(340, resting.width), height: notch.size.height + 38), topRadius: 10,
-                      bottomRadius: 24)
+            let subtitle = peekHasSubtitle ? Self.peekSubtitleHeight : 0
+            self.init(size: CGSize(width: max(340, resting.width), height: notch.size.height + 38 + subtitle),
+                      topRadius: 10, bottomRadius: 24)
         case .expanded:
-            self.init(size: Self.expandedSize, topRadius: 14, bottomRadius: 32)
+            self.init(size: Self.expandedSize(showsClock: showsClock), topRadius: 14, bottomRadius: 32)
         }
     }
 

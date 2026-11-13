@@ -55,6 +55,55 @@ final class KeepAwakeActivityTests {
         #expect(keepAwake.isOn)
     }
 
+    // MARK: Until Claude Code finishes
+
+    @Test func onUntilAgentsFinishItTurnsOffAsTheyDo() async throws {
+        let keepAwake = makeKeepAwake()
+        keepAwake.start(untilAgentsFinish: true)
+        #expect(keepAwake.untilAgentsFinish)
+        keepAwake.agentsFinished()
+        #expect(!keepAwake.isOn)
+        #expect(peeks.list.map(\.title) == ["Keep Awake off"])
+        #expect(peeks.list.first?.detail == "Claude Code finished")
+    }
+
+    @Test func turnedOnPlainlyItStaysOnWhenAgentsFinish() {
+        let keepAwake = makeKeepAwake()
+        keepAwake.start()
+        keepAwake.agentsFinished()
+        #expect(keepAwake.isOn)
+        #expect(peeks.list.isEmpty)
+    }
+
+    @Test func onUntilAgentsFinishSurvivesARelaunch() {
+        makeKeepAwake().start(untilAgentsFinish: true)
+        let relaunched = makeKeepAwake()
+        #expect(relaunched.isOn)
+        #expect(relaunched.untilAgentsFinish)
+        relaunched.stop()
+        relaunched.start()
+        #expect(!makeKeepAwake().untilAgentsFinish)
+    }
+
+    /// With Claude Code's sessions turned off nothing will say they finished, so it stays on until turned off.
+    @Test func onUntilAgentsFinishItStaysOnOnceSessionsAreTurnedOff() {
+        let keepAwake = makeKeepAwake()
+        keepAwake.start(untilAgentsFinish: true)
+        keepAwake.stopWaitingForAgents()
+        #expect(!keepAwake.untilAgentsFinish)
+        keepAwake.agentsFinished()
+        #expect(keepAwake.isOn)
+        #expect(!makeKeepAwake().untilAgentsFinish)
+    }
+
+    @Test func itsTabSaysItWaitsForClaudeCode() {
+        let since = Date(timeIntervalSinceReferenceDate: 0)
+        #expect(KeepAwakeActivity.sinceLine(since: since, at: since + 30, untilAgentsFinish: true)
+                == "Until Claude Code finishes")
+        #expect(KeepAwakeActivity.sinceLine(since: since, at: since + 12 * 60, untilAgentsFinish: true)
+                == "Until Claude Code finishes · 12m")
+    }
+
     // MARK: The battery
 
     @Test func itTurnsOffAsTheBatteryFallsTo20Percent() {
@@ -286,7 +335,7 @@ final class KeepAwakeActivityTests {
 
         // Turned on and off from the tab, it stays as it is: nothing types or clears, and nothing waits for the beat.
         // Only its color changes, which is all that tells on from off now that the eye is gone.
-        for turn in [keepAwake.start, keepAwake.stop] {
+        for turn in [{ keepAwake.start() }, keepAwake.stop] {
             turn()
             try await Task.sleep(for: .milliseconds(50))
             #expect(views(LaptopView.self, in: content) == [laptop])

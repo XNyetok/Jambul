@@ -23,10 +23,7 @@ struct ClaudeStatusLineInstaller {
     /// What runs the owner's status line inside Jambul's; the older form, without the newline, came first.
     private static let openers = [#"printf '%s\n' "$IN" | ( "#, #"printf '%s' "$IN" | ( "#]
 
-    enum Failure: Error, Equatable {
-        /// The settings aren't JSON Jambul can read, so it leaves them alone.
-        case unreadableSettings
-    }
+    typealias Failure = ClaudeSettingsFile.Failure
 
     /// The owner's status line as it was before Jambul's: whether there was one, and its value.
     private struct Saved: Codable {
@@ -34,8 +31,7 @@ struct ClaudeStatusLineInstaller {
         var value: JSONValue?
     }
 
-    /// The file to read and write: the settings, or what their link points to.
-    private var file: URL { settingsURL.resolvingSymlinksInPath() }
+    private var settingsFile: ClaudeSettingsFile { ClaudeSettingsFile(url: settingsURL) }
 
     /// Whether Jambul's status line is in place.
     func isInstalled() -> Bool {
@@ -128,33 +124,11 @@ struct ClaudeStatusLineInstaller {
     }
 
     private func readSettings() throws -> [String: Any] {
-        guard FileManager.default.fileExists(atPath: file.path) else { return [:] }
-        let data = try Data(contentsOf: file)
-        if data.allSatisfy({ $0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09 }) { return [:] }
-        guard let settings = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
-            throw Failure.unreadableSettings
-        }
-        return settings
+        try settingsFile.read()
     }
 
-    /// Writes the settings in one step, after keeping the first version Jambul ever changed. Settings Jambul created
-    /// and emptied again are removed rather than left behind as `{}`.
     private func write(_ settings: [String: Any]) throws {
-        let fileManager = FileManager.default
-        let backup = settingsURL.appendingPathExtension("jambul-backup")
-        let existed = fileManager.fileExists(atPath: file.path)
-        if settings.isEmpty, !fileManager.fileExists(atPath: backup.path) {
-            if existed { try fileManager.removeItem(at: file) }
-            return
-        }
-        try fileManager.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if existed, !fileManager.fileExists(atPath: backup.path) {
-            try fileManager.copyItem(at: file, to: backup)
-        }
-        var data = try JSONSerialization.data(withJSONObject: settings,
-                                              options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
-        data.append(0x0A)
-        try data.write(to: file, options: .atomic)
+        try settingsFile.write(settings)
     }
 
     private func save(_ saved: Saved) throws {

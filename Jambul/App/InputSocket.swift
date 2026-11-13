@@ -2,25 +2,34 @@ import Darwin
 import Foundation
 import os
 
-/// Listens on a Unix socket for what Claude Code's status line hands over: one JSON input per connection, then the
-/// connection closes. It waits on the socket, so nothing runs between inputs.
+/// Listens on a Unix socket for what Claude Code hands over through its status line or its hooks: one input per
+/// connection, then the connection closes. It waits on the socket, so nothing runs between inputs.
 ///
 /// The socket sits in a folder only the owner can open, so no other account on the Mac can reach it, and only files
 /// macOS keeps for the owner name it. A Unix socket's path is limited to 103 bytes.
-final class UsageSocket: @unchecked Sendable {
-    /// The most an input may hold. Claude Code's status line input is a few kilobytes.
+final class InputSocket: @unchecked Sendable {
+    /// The most an input may hold. Claude Code's status line input is a few kilobytes, and a hook's mostly too, though
+    /// one after a tool ran carries what the tool returned.
     static let maxInput = 256 * 1024
 
     let path: String
+    /// What it listens for, for the log.
+    private let name: String
+    /// Whether an input larger than `maxInput` still arrives, cut to its first `maxInput` bytes, rather than not at all.
+    private let keepsStartOfLargeInput: Bool
     private let onInput: @MainActor (Data) -> Void
     /// Everything below is touched only on `queue`.
-    private let queue = DispatchQueue(label: "com.debikurnia.Jambul.usage-socket")
+    private let queue: DispatchQueue
     private var listener: DispatchSourceRead?
     private var clients: [Int32: (source: DispatchSourceRead, data: Data)] = [:]
 
-    init(path: String, onInput: @escaping @MainActor (Data) -> Void) {
+    init(path: String, name: String = "Claude Code's status line", keepsStartOfLargeInput: Bool = false,
+         onInput: @escaping @MainActor (Data) -> Void) {
         self.path = path
+        self.name = name
+        self.keepsStartOfLargeInput = keepsStartOfLargeInput
         self.onInput = onInput
+        queue = DispatchQueue(label: "com.debikurnia.Jambul.socket.\((path as NSString).lastPathComponent)")
     }
 
     deinit {
@@ -64,7 +73,7 @@ final class UsageSocket: @unchecked Sendable {
         source.setCancelHandler { close(descriptor) }
         queue.sync { listener = source }
         source.resume()
-        Logger.activities.notice("usage: listening for Claude Code's status line")
+        Logger.activities.notice("listening for \(self.name, privacy: .public)")
     }
 
     func stop() {
@@ -100,7 +109,7 @@ final class UsageSocket: @unchecked Sendable {
             if count > 0 {
                 entry.data.append(contentsOf: buffer[..<count])
                 if entry.data.count > Self.maxInput {
-                    finish(client, delivering: nil)
+                    finish(client, delivering: keepsStartOfLargeInput ? entry.data.prefix(Self.maxInput) : nil)
                     return
                 }
             } else if count == 0 {

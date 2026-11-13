@@ -6,7 +6,8 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let activities = ActivityCenter()
     private let preferences = Preferences()
-    private lazy var settings = SettingsWindowController(preferences: preferences, usage: usage)
+    private lazy var settings = SettingsWindowController(preferences: preferences, usage: usage,
+                                                                 agent: agent)
     private var island: IslandController?
     private var statusItem: NSStatusItem?
     private lazy var home = HomeActivity(activities: activities)
@@ -22,11 +23,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var usage = UsageActivity(activities: activities, defaults: .standard)
     private let antigravityUsage = AntigravityUsageSource()
     private let codexUsage = CodexUsageSource()
-    private var usageSocket: UsageSocket?
+    private var usageSocket: InputSocket?
     private lazy var claudeStatusLine = ClaudeStatusLineInstaller(
         settingsURL: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/settings.json"),
         savedURL: Self.supportFolder.appending(path: "claude-statusline.json"),
         socketPath: Self.supportFolder.appending(path: "usage.sock").path)
+    private lazy var agent = AgentActivity(activities: activities)
+    private var agentSocket: InputSocket?
+    /// The app in front before the one just activated, to tell unlocking the screen from the owner switching apps.
+    private var lastActiveApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    private lazy var agentHooks = AgentHookInstaller(
+        settingsURL: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/settings.json"),
+        socketPath: Self.supportFolder.appending(path: "agent.sock").path)
     #if DEBUG
     private let demo = DemoActivity()
     #endif
@@ -42,8 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let keepAwake = KeepAwakeActivity(activities: activities)
         self.keepAwake = keepAwake
-        activities.registerJambulsActivities(home: home, usage: usage, keepAwake: keepAwake, timer: timer,
-                                             battery: battery)
+        activities.registerJambulsActivities(home: home, usage: usage, agent: agent, keepAwake: keepAwake,
+                                             timer: timer, battery: battery)
         #if DEBUG
         activities.register(demo)
         #endif
@@ -53,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.island = island
         }
         startUsage()
+        startAgent(keepAwake: keepAwake)
         statusItem = makeStatusItem()
         // Once the island is there for its peeks; the first reading is only a starting point.
         // The battery first, so its low-battery warning comes before Keep Awake saying it turned off.
@@ -180,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startUsageSocket() {
         guard usageSocket == nil else { return }
-        let socket = UsageSocket(path: claudeStatusLine.socketPath) { [usage] input in
+        let socket = InputSocket(path: claudeStatusLine.socketPath) { [usage] input in
             let isCurrent = UsageParsing.claudeRequestTime(fromStatusLine: input).map {
                 usage.noteClaudeRequestTime($0.milliseconds, session: $0.session)
             } ?? false
@@ -193,6 +202,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             usage.markProblem(.claude, String(localized: "Couldn’t listen for Claude Code"))
             Logger.app.error("usage: couldn't open the socket: \(error, privacy: .public)")
+        }
+    }
+
+    // MARK: - Claude Code sessions
+
+    private func startAgent(keepAwake: KeepAwakeActivity) {
+        agent.onConnect = { [weak self] in self?.openSettings() }
+        agent.onAllFinished = { [weak keepAwake] in keepAwake?.agentsFinished() }
+        keepAwake.agentsAreWorking = { [agent] in agent.isLive }
+        // In the terminal of a session waiting on the owner, they see its request.
+        // Not when unlocking the screen brings the terminal back: nobody has seen the request yet.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                                                          object: nil, queue: .main) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            let bundle = app?.bundleIdentifier
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                defer { self.lastActiveApp = bundle }
+                guard self.lastActiveApp != "com.apple.loginwindow" else { return }
+                self.agent.appActivated(bundle)
+            }
+        }
+        // Each change of settings already applies the island's and the usage limits'; the sessions ride along.
+        let settingsChanged = preferences.onChange
+        preferences.onChange = { [weak self] in
+            settingsChanged?()
+            self?.applyAgentPreferences()
+        }
+        applyAgentPreferences()
+    }
+
+    /// Adds Jambul's hooks to Claude Code as the owner turns its sessions on, and takes them out as they turn them off.
+    private func applyAgentPreferences() {
+        if preferences.showsAgentSessions {
+            startAgentSocket()
+            do {
+                // Writes nothing when the hooks are already right.
+                try agentHooks.install()
+                if agentSocket != nil { agent.problem = nil }
+            } catch {
+                agent.problem = String(localized: "Couldn’t change Claude Code’s settings")
+                Logger.app.error("agent: couldn't connect Claude Code's hooks: \(error, privacy: .public)")
+            }
+            agent.isConnected = true
+        } else {
+            if agentHooks.hasAny() {
+                do {
+                    try agentHooks.uninstall()
+                } catch {
+                    Logger.app.error("agent: couldn't disconnect Claude Code's hooks: \(error, privacy: .public)")
+                }
+            }
+            agentSocket?.stop()
+            agentSocket = nil
+            agent.isConnected = false
+            agent.problem = nil
+            agent.forgetSessions()
+            keepAwake?.stopWaitingForAgents()
+        }
+    }
+
+    private func startAgentSocket() {
+        guard agentSocket == nil else { return }
+        let socket = InputSocket(path: agentHooks.socketPath, name: "Claude Code's hooks",
+                                 keepsStartOfLargeInput: true) { [agent] in agent.receive($0) }
+        do {
+            try socket.start()
+            agentSocket = socket
+        } catch {
+            agent.problem = String(localized: "Couldn’t listen for Claude Code")
+            Logger.app.error("agent: couldn't open the socket: \(error, privacy: .public)")
         }
     }
 
@@ -268,11 +348,12 @@ extension AppDelegate: NSMenuItemValidation {
 extension ActivityCenter {
     /// Registers Jambul's own activities, for the app, its previews and its tests alike. The order they register in is
     /// the order of the open island's tabs and of the cards on Home: Home first, where the island opens as Jambul
-    /// starts, then the usage limits, Keep Awake and the timer. The battery has no tab, so its card comes last on Home.
-    /// Between live activities of the same priority, the one registered first also takes the right beside the notch.
-    func registerJambulsActivities(home: HomeActivity, usage: UsageActivity, keepAwake: KeepAwakeActivity,
-                                   timer: TimerActivity, battery: BatteryActivity) {
-        let inOrder: [any IslandActivity] = [home, usage, keepAwake, timer, battery]
+    /// starts, then the usage limits, Claude Code's sessions, Keep Awake and the timer. The battery has no tab, so its
+    /// card comes last on Home. Between live activities of the same priority, the one registered first also takes the
+    /// right beside the notch.
+    func registerJambulsActivities(home: HomeActivity, usage: UsageActivity, agent: AgentActivity,
+                                   keepAwake: KeepAwakeActivity, timer: TimerActivity, battery: BatteryActivity) {
+        let inOrder: [any IslandActivity] = [home, usage, agent, keepAwake, timer, battery]
         for activity in inOrder { register(activity) }
     }
 }

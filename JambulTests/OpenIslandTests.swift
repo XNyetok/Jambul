@@ -18,8 +18,8 @@ final class OpenIslandTests {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    /// Jambul's activities as it registers them, none of them live: Home, the usage limits, Keep Awake, the timer and
-    /// the battery. With `everyCard`, the battery has a reading and Claude is turned on, so Home shows all four cards;
+    /// Jambul's activities as it registers them, none of them live: Home, the usage limits, Claude Code's sessions, Keep
+    /// Awake, the timer and the battery. With `everyCard`, the battery has a reading and Claude is turned on, so Home shows all four cards;
     /// without, as on a Mac without a battery and with no subscription on, only Keep Awake's and the timer's.
     @discardableResult
     private func registerJambulsActivities(everyCard: Bool = true)
@@ -29,8 +29,8 @@ final class OpenIslandTests {
         let keepAwake = KeepAwakeActivity(activities: activities, defaults: defaults, bootSession: nil, holdsScreen: false)
         let battery = BatteryActivity(activities: activities)
         let usage = UsageActivity(activities: activities)
-        activities.registerJambulsActivities(home: home, usage: usage, keepAwake: keepAwake, timer: timer,
-                                             battery: battery)
+        activities.registerJambulsActivities(home: home, usage: usage, agent: AgentActivity(activities: activities),
+                                             keepAwake: keepAwake, timer: timer, battery: battery)
         if everyCard {
             battery.update(PowerState(percent: 76, isOnExternalPower: false))
             usage.enabled = [.claude]
@@ -53,37 +53,41 @@ final class OpenIslandTests {
         return CGPoint(x: left + width - 6, y: contentMiddle)
     }
 
-    /// Every tab Jambul has fits beside the notch, the MacBook Air's measured one and wider ones too.
+    /// Every tab Jambul has fits beside the notch, the MacBook Air's measured one and wider ones too, at full width:
+    /// the left side holds the extra one.
     @Test(arguments: [179, 190, 200, 210, 220] as [CGFloat])
     func everyTabFitsBesideTheNotch(notchWidth: CGFloat) {
         let (home, _, _) = registerJambulsActivities()
         let notch = NotchMetrics(size: CGSize(width: notchWidth, height: 32), compactHeight: 33)
         let tabs = activities.activities.filter(\.hasTab)
-        let width = IslandLayout.tabButtonWidth(count: tabs.count, notch: notch)
-        let bar = NSHostingView(rootView: IslandTabBar(tabs: tabs, selected: home.id, buttonWidth: width) { _ in })
+        let sides = IslandLayout.tabSides(count: tabs.count)
+        #expect(sides.leading == 3 && sides.trailing == 2)
+        let width = IslandLayout.tabButtonWidth(count: sides.leading, notch: notch)
+        let left = Array(tabs.prefix(sides.leading))
+        let group = NSHostingView(rootView: TabGroupHost(tabs: left, selected: home.id, buttonWidth: width))
             .fittingSize
         let room = IslandLayout.besideNotchRoom(notch)
-        #expect(bar.width <= room, "\(tabs.count) tabs are \(bar.width) pt wide, with room for \(room)")
-        #expect(bar.height <= notch.size.height)
+        #expect(group.width <= room, "\(left.count) tabs are \(group.width) pt wide, with room for \(room)")
+        #expect(group.height <= notch.size.height)
     }
 
-    /// The tabs beside the notch go Home, the usage limits, Keep Awake and the timer.
-    @Test func theTabsGoHomeUsageKeepAwakeAndTheTimer() {
+    /// The tabs beside the notch go Home, the usage limits, Claude Code's sessions, Keep Awake and the timer.
+    @Test func theTabsGoHomeUsageClaudeCodeKeepAwakeAndTheTimer() {
         registerJambulsActivities()
         let model = IslandModel(notch: notch, activities: activities)
-        #expect(model.tabs.map(\.id) == ["home", "usage", "keepAwake", "timer"])
+        #expect(model.tabs.map(\.id) == ["home", "usage", "agent", "keepAwake", "timer"])
     }
 
-    /// Beside the MacBook Air's notch, three tabs keep their full width and four narrow to fit, so the island keeps its
-    /// size.
+    /// On one side of the MacBook Air's notch, three tabs keep their full width and four would narrow to fit, so the
+    /// island keeps its size.
     @Test func tabsNarrowOnlyWhenTheyWouldntFit() {
         #expect(IslandLayout.tabButtonWidth(count: 3, notch: notch) == IslandLayout.tabButtonSize.width)
         #expect(IslandLayout.tabButtonWidth(count: 4, notch: notch) == 25)
     }
 
     /// Every day of the year at its widest times, in locales with a 24-hour clock and with a 12-hour one, since the
-    /// clock writes the time as each person's locale does. It always fits, and it only drops the date or the day when
-    /// they wouldn't fit.
+    /// clock writes the time as each person's locale does. Below the camera, in a room as wide as one side of the
+    /// notch, it always fits, and it only drops the date or the day when they wouldn't fit.
     @Test(arguments: ["en_US", "en_GB", "en_ID", "id_ID", "de_DE", "fr_FR", "es_ES", "pt_BR", "ja_JP", "zh_Hans_CN",
                       "ko_KR", "hi_IN"])
     func theClockFitsBesideTheNotchOnEveryDayOfTheYear(localeID: String) throws {
@@ -153,20 +157,23 @@ final class OpenIslandTests {
         let panel = try await openPanel(on: model)
         defer { panel.orderOut(nil) }
 
-        // Near the left end of Keep Awake's tab, the third beside the notch, where its symbol doesn't reach: the whole
-        // pill is the tab's. The tabs start at the island's content inset, centered in the notch's height.
+        // Near the left end of Keep Awake's tab, the first right of the camera, where its symbol doesn't reach: the
+        // whole pill is the tab's. Each side lines up with the island's content inset, centered in the notch's height.
         let canvas = IslandLayout.canvasSize(notch)
-        let count = model.tabs.count
-        let step = IslandLayout.tabButtonWidth(count: count, notch: notch) + IslandLayout.tabButtonSpacing
+        let sides = IslandLayout.tabSides(count: model.tabs.count)
+        let width = IslandLayout.tabButtonWidth(count: sides.leading, notch: notch)
+        let step = width + IslandLayout.tabButtonSpacing
         let firstTab = islandLeft + IslandLayout.expandedContentInset
-        let tab = CGPoint(x: firstTab + 2 * step + 3, y: canvas.height - notch.size.height / 2)
+        let lastTab = islandLeft + IslandLayout.expandedSize.width - IslandLayout.expandedContentInset
+        let tab = CGPoint(x: lastTab - CGFloat(sides.trailing) * step + IslandLayout.tabButtonSpacing + 3,
+                          y: canvas.height - notch.size.height / 2)
         click(panel, at: tab, count: 1)
         try await Task.sleep(for: .milliseconds(100))
         #expect(model.selectedTab == keepAwake.id)
         #expect(model.presentation == .expanded)
 
         // Between the tabs and the notch, the click reaches the island itself, which closes.
-        let besideTabs = CGPoint(x: firstTab + CGFloat(count) * step + 2, y: tab.y)
+        let besideTabs = CGPoint(x: firstTab + CGFloat(sides.leading) * step + 2, y: tab.y)
         click(panel, at: besideTabs, count: 1)
         try await Task.sleep(for: .milliseconds(100))
         #expect(model.presentation != .expanded)
@@ -286,5 +293,17 @@ final class OpenIslandTests {
         NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                            windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: clickCount,
                            pressure: 1)!
+    }
+}
+
+/// One side's tabs, in a view of their own for the highlight's namespace.
+private struct TabGroupHost: View {
+    let tabs: [any IslandActivity]
+    let selected: String
+    let buttonWidth: CGFloat
+    @Namespace private var highlight
+
+    var body: some View {
+        IslandTabGroup(tabs: tabs, selected: selected, buttonWidth: buttonWidth, highlight: highlight) { _ in }
     }
 }

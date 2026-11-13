@@ -97,7 +97,12 @@ final class IslandController: NSObject {
         let hide = preferences.hidesInFullScreen && isShowingFullScreen
         // Before the guard: the panels start out hidden, and at launch the model must hear it too.
         model.isHidden = hide
-        model.isFullScreen = isShowingFullScreen
+        // Open, the island grows a row for the clock or gives it back: as one of its own moves, not a jump.
+        if model.presentation == .expanded, model.isFullScreen != isShowingFullScreen {
+            withAnimation(Motion.tabStateChange) { model.isFullScreen = isShowingFullScreen }
+        } else {
+            model.isFullScreen = isShowingFullScreen
+        }
         guard hide != isHidden else { return }
         isHidden = hide
         if hide {

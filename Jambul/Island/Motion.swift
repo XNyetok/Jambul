@@ -150,4 +150,13 @@ enum Motion {
         static let workingStep: Animation = .spring(duration: 0.6, bounce: 0.3)
         static let workingStepAngle: Double = 36
     }
+
+    /// Claude Code's sessions: the eye on a peek saying how a turn ended, once, after the peek has come out.
+    enum Agent {
+        static let feel: Animation = .spring(duration: 0.6, bounce: 0.35).delay(0.35)
+        /// A sad eye: half closed, tilted and a little lower.
+        static let sadOpenness: CGFloat = 0.45
+        static let sadTilt: Double = -12
+        static let sadDrop: CGFloat = 2
+    }
 }

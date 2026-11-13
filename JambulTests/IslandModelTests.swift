@@ -192,6 +192,18 @@ struct IslandModelTests {
         #expect(IslandLayout.expandedSize.height + IslandLayout.canvasMargin <= IslandLayout.canvasSize(busy.notch).height)
     }
 
+    /// In full screen the open island is a row taller, for the day and time below the camera, and still fits its window.
+    @Test func theOpenIslandMakesRoomForTheClockInFullScreen() {
+        let model = makeModel()
+        model.clicked()
+        model.isFullScreen = true
+        #expect(model.layout.size.height == IslandLayout.expandedSize.height + IslandLayout.clockRowHeight)
+        #expect(model.layout.size.width == IslandLayout.expandedSize.width)
+        #expect(model.layout.size.height <= IslandLayout.canvasSize(model.notch).height)
+        model.isFullScreen = false
+        #expect(model.layout.size == IslandLayout.expandedSize)
+    }
+
     @Test func anotherActivityGoingLiveWhileOpenKeepsTheIslandOpenAndGuardsTheDoubleClick() async throws {
         let first = TestActivity(id: "first", isLive: true)
         let second = TestActivity(id: "second")
@@ -312,6 +324,50 @@ struct IslandModelTests {
         try await Task.sleep(for: .milliseconds(200))
         #expect(model.presentation == .peek)
         try await waitUntil { model.presentation == .idle }
+    }
+
+    /// News that stopped being true while it waited, like a permission given in the terminal, never shows.
+    @Test func aWithdrawnPeekNeverShows() async throws {
+        let model = makeModel()
+        let transitions = TransitionLog(model)
+        model.pointer(.island, isInside: true)
+        model.clicked()
+        activities.peek(Peek(symbol: "hand.raised.fill", tint: .yellow, title: "Needs you", mustBeSeen: true,
+                             source: "agent"))
+        activities.peek(Peek(symbol: "bell.fill", tint: .orange, title: "Hi", duration: .seconds(1), source: "other"))
+        activities.withdrawPeeks(from: "agent")
+
+        model.pointer(.island, isInside: false)
+        try await waitUntil { model.presentation == .peek }
+        #expect(model.peek?.title == "Hi")
+        try await waitUntil { model.presentation == .idle }
+        #expect(transitions.steps.filter { $0.hasSuffix("peek") }.count == 1)
+    }
+
+    /// News of one agent session doesn't take the place of another's waiting must-see peek.
+    @Test func aWaitingPeekIsReplacedOnlyByNewsOnItsOwnTopic() async throws {
+        let model = makeModel()
+        model.pointer(.island, isInside: true)
+        model.clicked()
+        activities.peek(Peek(symbol: "hand.raised.fill", tint: .yellow, title: "Needs you · A", mustBeSeen: true,
+                             source: "agent", topic: "a"))
+        activities.peek(Peek(symbol: "hand.raised.fill", tint: .yellow, title: "Needs you · B", duration: .seconds(1),
+                             mustBeSeen: true, source: "agent", topic: "b"))
+        activities.withdrawPeeks(from: "agent", topic: "b")
+
+        model.pointer(.island, isInside: false)
+        try await waitUntil { model.presentation == .peek }
+        #expect(model.peek?.title == "Needs you · A")
+    }
+
+    @Test func aPeekWithASecondLineMakesTheIslandTaller() {
+        let model = makeModel()
+        activities.peek(Peek(symbol: "checkmark.circle.fill", tint: .orange, title: "Done · Jambul",
+                             subtitle: "Tests pass"))
+        #expect(model.presentation == .peek)
+        #expect(model.layout.size.height
+                == IslandLayout(.peek, notch: model.notch, compactSlotWidth: nil).size.height
+                + IslandLayout.peekSubtitleHeight)
     }
 
     @Test func aPeekHeldPastItsDurationIsDropped() async throws {
