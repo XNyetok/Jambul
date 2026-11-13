@@ -5,6 +5,7 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 ## [Unreleased]
 
 ### Fixed
+- The open island no longer has a shadow, which ended in a visible line a little below it.
 - Antigravity's usage now shows up after login, when Jambul starts before the network is ready.
 
 ## [0.2.1] - 2026-11-13

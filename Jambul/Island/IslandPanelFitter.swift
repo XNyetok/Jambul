@@ -9,7 +9,7 @@ import Observation
 /// reaches the island across them (measured), and hover is how the island opens. So the panel takes the pointer while the
 /// island is out, and shrinks to the island's own frame once the island has settled, which leaves the area below and
 /// beside the notch to the apps there while an activity rests beside the notch. While the island moves, and while it is
-/// open and casts its shadow, the panel is the whole canvas. Idle, it keeps the canvas for whatever comes out next.
+/// open, the panel is the whole canvas. Idle, it keeps the canvas for whatever comes out next.
 ///
 /// The island's view keeps the canvas's size and place on screen whatever the panel's frame, so SwiftUI never lays it
 /// out again and the island doesn't move as the panel changes (measured: not one frame out of place in 120 changes).
@@ -59,17 +59,18 @@ final class IslandPanelFitter {
         followIsland()
     }
 
-    /// Where the island's view sits on screen: room for the open island and its shadow, hanging from the top of the
-    /// screen, centered on the notch.
+    /// Where the island's view sits on screen: room for the open island, hanging from the top of the screen, centered
+    /// on the notch.
     var canvas: CGRect {
         geometry.panelFrame(size: IslandLayout.canvasSize(geometry.metrics))
     }
 
     /// The panel's frame with the island at rest as it is now: the island's own frame, on whole points, or the canvas
-    /// while the island is open, for its shadow, or idle.
+    /// while the island is idle or open. Open, it closes as soon as the pointer leaves, so shrinking then would only
+    /// be undone.
     var restingFrame: CGRect {
         let layout = model.layout
-        guard model.presentation != .idle, !layout.castsShadow else { return canvas }
+        guard model.presentation != .idle, model.presentation != .expanded else { return canvas }
         let size = CGSize(width: layout.size.width.rounded(.up), height: layout.size.height.rounded(.up))
         return geometry.panelFrame(size: size)
     }

@@ -10,11 +10,10 @@ struct IslandView: View {
         let shape = IslandShape(topRadius: layout.topRadius, bottomRadius: layout.bottomRadius)
 
         ZStack(alignment: .top) {
-            shape
-                .fill(.black)
-                .shadow(color: .black.opacity(layout.castsShadow ? 0.45 : 0), radius: 16, y: 6)
+            // No shadow: its window is only a little larger than the open island and cut the shadow off in a line.
+            shape.fill(.black)
 
-            // Clipped separately from the shadow, so content never draws outside the island while it morphs.
+            // Clipped, so content never draws outside the island while it morphs.
             ZStack(alignment: .top) {
                 let compact = model.compactActivities
                 if !compact.isEmpty, let slotWidth = model.compactSlotWidth,
