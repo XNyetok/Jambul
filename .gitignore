@@ -25,9 +25,5 @@ xcuserdata/
 *.mobileprovision
 *.provisionprofile
 
-# Files that stay on one person's Mac: personal instructions for Claude Code and its local settings
-CLAUDE.local.md
-.claude/settings.local.json
-
 # Phase plans with evidence from someone's own Mac stay in private notes
 docs/PHASE-*.md

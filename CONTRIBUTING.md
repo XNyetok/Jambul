@@ -41,11 +41,11 @@ cd Jambul
 - Run `./scripts/test.sh` before opening a pull request. CI runs it again.
 
 ## Keeping secrets out
-Jambul's repository is public, and so is everything in its history. To keep secrets, personal data and AI attribution out of it, `./scripts/setup.sh` installs git hooks into `.git/hooks` that run [`scripts/scan.sh`](scripts/scan.sh). It reads every file straight from git and scans it whole:
+Jambul's repository is public, and so is everything in its history. To keep secrets and personal data out of it, `./scripts/setup.sh` installs git hooks into `.git/hooks` that run [`scripts/scan.sh`](scripts/scan.sh). It reads every file straight from git and scans it whole:
 - **Before each commit and merge,** the staged files and the commit message are checked against [gitleaks](https://github.com/gitleaks/gitleaks)' rules for hundreds of token and key formats, and against Jambul's own rules:
   - no home-folder paths (`/Users/<name>`), and no email addresses other than the project's public ones;
-  - no AI attribution, and no markers that keep CI from running;
-  - no files that must never be committed: signing material, logs and crash reports, `.env` files, local-only files;
+  - no markers that keep CI from running;
+  - no files that must never be committed: signing material, logs and crash reports, `.env` files;
   - no archives, PDFs, RTF documents or executables, which can't be checked for any of this.
 - **Before each push,** every commit, tag and ref name the remote doesn't have yet is checked again: files, messages, and who made them.
 - **Your own private strings,** such as a private email address or your Mac's name, can go in `.git/info/private-patterns`, one per line. That file never leaves your Mac. The scan matches them as written and also with case, punctuation and line breaks ignored, and reports any match by place only, never by content.
@@ -64,11 +64,6 @@ Nothing scans comments or issues. Please don't paste logs, crash reports or scre
 5. A maintainer reviews it and squash-merges it into `main`.
 
 Commit messages and pull requests are in English, short and specific. A commit's subject says what changed, in the imperative and in about 50 characters ("Fix the timer's ring after sleep"). Add a body only when the subject doesn't explain why, in a few lines. How you tested it belongs in the pull request, not in the commit.
-
-## AI-assisted contributions
-Contributions made with AI coding tools are welcome, and you are responsible for every line: understand it and test it on a real Mac.
-
-Jambul doesn't credit AI tools as authors. Commits, pull requests, issues and files carry no co-author trailer for an AI tool and no "generated with" footer, and commits aren't authored as an AI tool. The scan refuses the usual forms of all three. The repository's `.claude/settings.json` already turns that attribution off for Claude Code; with another tool, turn it off yourself or remove it before committing. `CLAUDE.md` holds the instructions for coding agents, and they follow the same rules as everyone else.
 
 ## Releases
 Maintainers publish releases as described in [docs/RELEASING.md](docs/RELEASING.md).

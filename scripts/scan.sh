@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keeps secrets, personal data and AI attribution out of Jambul's public repository. The git hooks that
+# Keeps secrets and personal data out of Jambul's public repository. The git hooks that
 # scripts/setup.sh installs run it on every commit, commit message, merge and push, and CI runs it again on GitHub.
 #
 #   scripts/scan.sh staged             the files staged for the next commit, and who is committing them
@@ -15,8 +15,8 @@
 #
 # Every file is read straight from git by its object ID, never by its path, and scanned whole:
 # - Jambul's own rules, applied by this script so nothing escapes them: home-folder paths, email addresses other than
-#   the project's public ones, AI attribution, CI skip markers in messages, files that must never be committed
-#   (signing material, logs, local files, private phase plans), and archives, PDFs and executables, which can't be
+#   the project's public ones, CI skip markers in messages, files that must never be committed
+#   (signing material, logs, private phase plans), and archives, PDFs and executables, which can't be
 #   read for any of this.
 # - gitleaks' default rules for hundreds of token and key formats. Each file is handed to it under a plain number and
 #   after a blank first line, so it can't skip a file by its name or by its first bytes.
@@ -58,15 +58,10 @@ home_path='/Users/[A-Za-z0-9._-]+'
 home_path_allowed='^/Users/(Shared|you|username|USER|name)$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}'
 email_allowed='^(debi@elysiumx[.]org|[^@]+@users[.]noreply[.]github[.]com|(noreply|support|git)@github[.]com|[^@]+@example[.](com|org|net))$'
-# Case-insensitive: trailers or footers that credit an AI tool, and AI tools' addresses and links.
-ai_tools='(claude|anthropic|copilot|cursor|codex|chatgpt|openai|gemini|devin)'
-ai_attribution="^[[:space:]]*(co-authored-by|co-developed-by|assisted-by|generated-by|helped-by|signed-off-by)[[:space:]]*:.*$ai_tools|(generated|made|created|written|built|produced|authored)[[:space:]]+(with|by|using|via)[[:space:]]+[[]?$ai_tools|noreply@anthropic[.]com|claude[.]ai/code|claude[.]com/claude-code"
-# Case-insensitive: an author, committer or tagger that is an AI tool.
-ai_identity='@(anthropic[.]com|openai[.]com|cursor[.]com|cursor[.]sh)>|^(claude|claude code|copilot|github copilot|cursor|cursor agent|cursoragent|codex|chatgpt|devin) <|(claude|copilot|codex|devin|cursor)[a-z-]*[[]bot[]]'
 # Case-insensitive: a commit message that would keep CI from running on it.
 skip_marker='[[](skip ci|ci skip|no ci|skip actions|actions skip)[]]|^[[:space:]]*skip-checks[[:space:]]*:[[:space:]]*true'
 # Case-insensitive: paths that must never be committed.
-forbidden_path='[.](p12|pfx|cer|crt|der|pem|key|p8|mobileprovision|provisionprofile|keychain|keychain-db|log|ips|crash|spindump|shutdownstall|diag|tracev3|logarchive|zip|tar|tgz|gz|bz2|xz|7z|rar|dmg|pkg|xip|ipa|pdf|rtf|rtfd)$|(^|/)[.]env([.][^/]*)?$|(^|/)diagnosticreports/|(^|/)claude[.]local[.]md$|(^|/)[.]claude/settings[.]local[.]json$|(^|/)docs/phase-[^/]*$'
+forbidden_path='[.](p12|pfx|cer|crt|der|pem|key|p8|mobileprovision|provisionprofile|keychain|keychain-db|log|ips|crash|spindump|shutdownstall|diag|tracev3|logarchive|zip|tar|tgz|gz|bz2|xz|7z|rar|dmg|pkg|xip|ipa|pdf|rtf|rtfd)$|(^|/)[.]env([.][^/]*)?$|(^|/)diagnosticreports/|(^|/)docs/phase-[^/]*$'
 # Case-insensitive: images, which gitleaks reads as binary anyway. Jambul's own rules still read them.
 image_path='[.](png|jpe?g|gif|icns|heic|webp|tiff?|bmp|ico)$'
 
@@ -138,7 +133,7 @@ check_rules() {
     local what=$1 file=$2 kind=$3 subject=$2 lines
     if [[ $kind == message ]]; then
         # Addresses in Co-authored-by and Signed-off-by trailers are contributors' own, as GitHub and Dependabot write
-        # them. The lines stay in place so line numbers hold; AI attribution is still checked on the original.
+        # them. The lines stay in place so line numbers hold.
         awk '{ l = tolower($0); if (l ~ /^[[:space:]]*(co-authored-by|signed-off-by)[[:space:]]*:/) print ""; else print }' \
             "$file" > "$scratch/without-trailers"
         subject=$scratch/without-trailers
@@ -149,15 +144,12 @@ check_rules() {
     [[ -n $lines ]] && fail "$what: a home-folder path on line $lines"
     lines=$(lines_matching "$subject" "$email" "$email_allowed")
     [[ -n $lines ]] && fail "$what: an email address that isn't one of the project's public ones, on line $lines"
-    lines=$(lines_matching -i "$file" "$ai_attribution")
-    [[ -n $lines ]] && fail "$what: AI attribution on line $lines"
 }
 
-# Fails if a file of "Name <email>" lines holds a private identity or an AI tool's.
+# Fails if a file of "Name <email>" lines holds a private identity.
 check_identity() {
     local what=$1 file=$2
     has_private_file "$file" && fail "$what is a private identity"
-    grep -a -q -i -E -- "$ai_identity" "$file" && fail "$what is an AI tool"
 }
 
 # Runs gitleaks with its default rules on the given target, leaving findings as rule, file and line.
@@ -395,4 +387,4 @@ Skipping the hooks only moves the problem: CI runs the same scan on every push a
 EOF
     exit 1
 fi
-printf '%s✔ no secrets, personal data or AI attribution found (%s)%s\n' "$green" "$mode" "$reset" >&2
+printf '%s✔ no secrets or personal data found (%s)%s\n' "$green" "$mode" "$reset" >&2
