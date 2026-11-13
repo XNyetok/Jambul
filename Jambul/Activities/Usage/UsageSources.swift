@@ -1,5 +1,6 @@
 import CoreServices
 import Foundation
+import Network
 import os
 
 /// Watches a folder and everything in it through FSEvents, which macOS batches over `latency`; nothing polls.
@@ -60,7 +61,8 @@ final class FolderWatcher: @unchecked Sendable {
 /// off, and is stopped if it takes too long.
 ///
 /// It runs when the owner opens the Usage tab and the numbers are older than `staleAfter`, when the Mac wakes, and while
-/// agy is in use: agy writes to its log as it works, at most once per `minimumGap`.
+/// agy is in use: agy writes to its log as it works, at most once per `minimumGap`. A run that fails is tried once
+/// more as soon as the Mac is online: right after login the network isn't up yet, and agy waits for a sign-in.
 @MainActor
 final class AntigravityUsageSource {
     nonisolated static let staleAfter: TimeInterval = 5 * 60
@@ -72,15 +74,38 @@ final class AntigravityUsageSource {
         FileManager.default.homeDirectoryForCurrentUser.appending(path: ".gemini/antigravity-cli/log")
     }
 
+    enum RunFailure: Error {
+        case launch, timeout, exit(Int32)
+    }
+
     var onReading: (@MainActor (UsageReading) -> Void)?
     var onProblem: (@MainActor (String) -> Void)?
     private(set) var lastRun: Date?
     private var running = false
     private var watcher: FolderWatcher?
+    /// Whether Antigravity is turned on. The watcher can't tell: it is nil until agy has made its log folder.
+    private var started = false
+    private let logFolder: URL
+    private let findAgy: @MainActor () -> URL?
+    private let report: @Sendable (URL) async -> Result<Data, RunFailure>
+    /// Calls back once the Mac is online, and returns a way to call that off.
+    private let whenOnline: @MainActor (@escaping @MainActor () -> Void) -> @MainActor () -> Void
+    private var forgetRetry: (@MainActor () -> Void)?
+
+    init(logFolder: URL = AntigravityUsageSource.logFolder,
+         findAgy: @escaping @MainActor () -> URL? = AntigravityUsageSource.findAgy,
+         report: @escaping @Sendable (URL) async -> Result<Data, RunFailure> = AntigravityUsageSource.run,
+         whenOnline: @escaping @MainActor (@escaping @MainActor () -> Void) -> @MainActor () -> Void = OnlineWait.start) {
+        self.logFolder = logFolder
+        self.findAgy = findAgy
+        self.report = report
+        self.whenOnline = whenOnline
+    }
 
     func start() {
+        started = true
         guard watcher == nil else { return }
-        watcher = FolderWatcher(folder: Self.logFolder, latency: 10) { [weak self] _ in
+        watcher = FolderWatcher(folder: logFolder, latency: 10) { [weak self] _ in
             self?.refresh(ifOlderThan: Self.minimumGap)
         }
     }
@@ -88,19 +113,30 @@ final class AntigravityUsageSource {
     func stop() {
         watcher?.stop()
         watcher = nil
+        started = false
+        forgetRetry?()
+        forgetRetry = nil
     }
 
     /// Runs agy unless it is running already or ran within `age`.
     func refresh(ifOlderThan age: TimeInterval = AntigravityUsageSource.staleAfter) {
         guard !running, lastRun.map({ Date.now.timeIntervalSince($0) >= age }) ?? true else { return }
-        guard let agy = Self.findAgy() else {
+        run(retrying: false)
+    }
+
+    private func run(retrying: Bool) {
+        // Whatever starts a run, a retry still waiting has nothing left to do.
+        forgetRetry?()
+        forgetRetry = nil
+        guard let agy = findAgy() else {
             onProblem?(String(localized: "agy not found"))
             return
         }
         running = true
         lastRun = .now
-        Task {
-            let result = await Self.run(agy)
+        Task { [weak self, report] in
+            let result = await report(agy)
+            guard let self else { return }
             running = false
             switch result {
             case .success(let data):
@@ -111,21 +147,23 @@ final class AntigravityUsageSource {
                 }
             case .failure:
                 onProblem?(String(localized: "agy didn’t answer"))
+                // Once only, so an agy that never answers isn't run over and over.
+                guard !retrying, started else { return }
+                forgetRetry = whenOnline { [weak self] in
+                    guard let self, !self.running else { return }
+                    self.run(retrying: true)
+                }
             }
         }
     }
 
-    static func findAgy() -> URL? {
+    nonisolated static func findAgy() -> URL? {
         candidatePaths.map { URL(filePath: ($0 as NSString).expandingTildeInPath) }
             .first { FileManager.default.isExecutableFile(atPath: $0.path) }
     }
 
-    private enum RunFailure: Error {
-        case launch, timeout, exit(Int32)
-    }
-
     /// Runs agy off the main thread and returns what it printed.
-    private nonisolated static func run(_ agy: URL) async -> Result<Data, RunFailure> {
+    nonisolated static func run(_ agy: URL) async -> Result<Data, RunFailure> {
         await Task.detached(priority: .utility) {
             let fileManager = FileManager.default
             let folder = fileManager.temporaryDirectory.appending(path: "jambul-agy")
@@ -178,6 +216,31 @@ final class AntigravityUsageSource {
             let data = (try? Data(contentsOf: outputURL)) ?? Data()
             return .success(data.prefix(1 << 20))
         }.value
+    }
+}
+
+/// Waits for the Mac to have a network path, without polling: the system calls back as the path changes, and right
+/// away with the path as it is.
+enum OnlineWait {
+    /// Calls `action` once, as soon as the Mac is online, and returns a way to call that off.
+    @MainActor
+    static func start(_ action: @escaping @MainActor () -> Void) -> @MainActor () -> Void {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in
+                // The monitor is cancelled on the main actor only, so a second update can't run the action twice.
+                guard monitor.pathUpdateHandler != nil else { return }
+                monitor.pathUpdateHandler = nil
+                monitor.cancel()
+                action()
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "com.debikurnia.Jambul.online-wait"))
+        return {
+            monitor.pathUpdateHandler = nil
+            monitor.cancel()
+        }
     }
 }
 

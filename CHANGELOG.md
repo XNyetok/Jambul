@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed
+- Antigravity's usage now shows up after login, when Jambul starts before the network is ready.
+
 ## [0.2.1] - 2026-11-13
 Fixes for clicks around the island and for Claude's usage, and a new tab order.
 
