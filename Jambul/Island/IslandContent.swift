@@ -75,8 +75,8 @@ struct PeekContent: View {
     /// The title, with its emphasis in the peek's color.
     private var title: Text {
         guard let emphasis = peek.emphasis, let range = peek.title.range(of: emphasis) else { return Text(peek.title) }
-        return Text(peek.title[..<range.lowerBound]) + Text(emphasis).foregroundStyle(peek.tint)
-            + Text(peek.title[range.upperBound...])
+        let before = Text(peek.title[..<range.lowerBound]), after = Text(peek.title[range.upperBound...])
+        return Text("\(before)\(Text(emphasis).foregroundStyle(peek.tint))\(after)")
     }
 }
 

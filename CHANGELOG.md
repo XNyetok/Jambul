@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Changed
+- Jambul now needs macOS 27 or later.
+
 ## [0.3.0] - 2026-11-13
 Claude Code's sessions in the island, and tabs on both sides of the camera.
 

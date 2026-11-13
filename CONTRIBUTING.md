@@ -8,7 +8,7 @@ Thanks for helping make Jambul better. Bug reports, ideas and pull requests are 
 - **Small fixes**, like typos or an obvious bug: a pull request is fine straight away.
 
 ## Setting up
-You need macOS 14 or later, Xcode 27, [XcodeGen](https://github.com/yonaskolb/XcodeGen) and [gitleaks](https://github.com/gitleaks/gitleaks):
+You need macOS 27 or later, Xcode 27, [XcodeGen](https://github.com/yonaskolb/XcodeGen) and [gitleaks](https://github.com/gitleaks/gitleaks):
 
 ```sh
 brew install xcodegen gitleaks
@@ -29,7 +29,7 @@ cd Jambul
 
 ## Project rules
 - **Clean room.** Jambul is MIT-licensed. Never copy code from GPL projects, such as boring.notch; ideas are fine. Code under MIT, BSD or Apache-2.0 may be adapted, with its notice added to [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-- **macOS 14 is the deployment target.** Newer APIs go behind `if #available`.
+- **macOS 27 is the deployment target.** APIs newer than that go behind `if #available`.
 - **Private APIs** are allowed, since Jambul ships outside the Mac App Store, but load them at runtime and fail safe, the way `SpaceInspector` does.
 - **Measure, don't guess.** Check geometry and system behavior on a real Mac before relying on them.
 - **Performance budget:** about 0% CPU while idle, under 30 MB of memory (60 MB with media playing). React to system events; no polling timers.

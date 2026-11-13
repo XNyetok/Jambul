@@ -6,7 +6,7 @@ Where Jambul is and where it's heading. Plans change as we learn; open an issue 
 - **Native and light.** Swift, AppKit for windows, SwiftUI for drawing. Anything that keeps moving on its own does so in short steps on a beat, or with Core Animation. Idle CPU ≈ 0%, memory under 30 MB, no polling.
 - **Apple-like.** Black and minimal; Jambul's character comes through small interactions.
 - **Calm interaction.** Hover opens, moving away closes, a click toggles. No swipe gestures.
-- **macOS 14 and later.** Liquid Glass on macOS 26 and later.
+- **macOS 27 and later**, so Jambul can use the system's current components.
 
 ### Motion
 1. Nothing pops in: every change uses a spring that can be interrupted.
