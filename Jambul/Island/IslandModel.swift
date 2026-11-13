@@ -51,6 +51,8 @@ final class IslandModel {
     /// Room kept beside the notch for the pointer. An activity that ends while the pointer rests on the lifted island or
     /// a peek would otherwise narrow the island out from under it; the room goes once the island settles or opens.
     private(set) var heldSlotWidth: CGFloat?
+    /// The same on the left of the notch. Each side holds its own room, so neither moves under the pointer.
+    private(set) var heldLeadingWidth: CGFloat?
     /// Whether anyone can see the island: not while the display sleeps or the screen is locked, nor while it rests hidden
     /// for a full-screen app. Views that redraw by themselves, like a countdown, hold still meanwhile.
     private(set) var isVisible = true
@@ -131,17 +133,28 @@ final class IslandModel {
     /// The activities with a tab in the open island, in the order they were registered.
     var tabs: [any IslandActivity] { center.activities.filter(\.hasTab) }
 
-    /// Each slot's width beside the notch: the widest the compact activities need, or the room held for the pointer if
-    /// that is wider. Both sides match, so the island stays centered on the notch.
+    /// The width of the slot right of the notch: what the most important compact activity needs there, or the room
+    /// held for the pointer if that is wider.
     var compactSlotWidth: CGFloat? {
-        let own = compactActivities.map(\.compactSlotWidth).max()
+        let own = compactActivities.first?.compactSlotWidth
         guard let heldSlotWidth else { return own }
         return max(heldSlotWidth, own ?? 0)
+    }
+
+    /// The width of the slot left of the notch: what the glyph there needs, the second activity's if there are two,
+    /// or the room held for the pointer if that is wider. Each side is as wide as what it holds, so the island needn't
+    /// be centered on the notch.
+    var compactLeadingWidth: CGFloat? {
+        let compact = compactActivities
+        let own = (compact.count > 1 ? compact[1] : compact.first)?.compactLeadingWidth
+        guard let heldLeadingWidth else { return own }
+        return max(heldLeadingWidth, own ?? 0)
     }
 
     /// The island's size and corners as it is drawn now, for the view and for finding the pointer on it alike.
     var layout: IslandLayout {
         IslandLayout(presentation, notch: notch, compactSlotWidth: compactSlotWidth,
+                     compactLeadingWidth: compactLeadingWidth,
                      peekHasSubtitle: presentation == .peek && peek?.subtitle != nil,
                      showsClock: presentation == .expanded && isFullScreen)
     }
@@ -425,9 +438,11 @@ final class IslandModel {
         if next == .expanded { pressesAimAtOldContent = true }
         // A pointer resting on the lifted island or a peek keeps the old activity's room, so the island doesn't narrow
         // from under it.
-        let room = !pointerRegions.isEmpty && (next == .lifted || next == .peek) ? compactSlotWidth : nil
+        let holds = !pointerRegions.isEmpty && (next == .lifted || next == .peek)
+        let room = holds ? compactSlotWidth : nil, leadingRoom = holds ? compactLeadingWidth : nil
         present(next) {
             if let room { self.heldSlotWidth = room }
+            if let leadingRoom { self.heldLeadingWidth = leadingRoom }
             self.liveActivities = live
         }
     }
@@ -476,7 +491,7 @@ final class IslandModel {
         let opening = next == .expanded && presentation != .expanded
         withAnimation(Motion.animation(from: presentation, to: next)) {
             // At rest or open, the island no longer keeps room for the pointer.
-            if next != .lifted && next != .peek { heldSlotWidth = nil }
+            if next != .lifted && next != .peek { (heldSlotWidth, heldLeadingWidth) = (nil, nil) }
             changes()
             // Opening on the tab it showed last, or the first time on the first.
             if opening { selectedTab = tabOnOpening }

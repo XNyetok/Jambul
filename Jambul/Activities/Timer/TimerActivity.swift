@@ -81,6 +81,8 @@ final class TimerActivity: NSObject, IslandActivity {
 
     /// Room for the countdown beside the notch: "25:00" is 39 pt wide there, and "1:00:00" 51 pt (measured).
     var compactSlotWidth: CGFloat { shown.total >= 3600 ? 54 : 42 }
+    /// The ring.
+    var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight }
 
     /// Weak, since the center holds its activities.
     @ObservationIgnored private weak var activities: ActivityCenter?

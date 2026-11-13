@@ -81,18 +81,18 @@ private struct TimerStartTab: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            TimerRing(fraction: 0, lineWidth: 5)
-                .frame(width: 44, height: 44)
+            TimerRing(fraction: 0, lineWidth: IslandLayout.tabRingWidth)
+                .frame(width: IslandLayout.tabGlyphHeight, height: IslandLayout.tabGlyphHeight)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Timer")
-                    .font(.headline)
+                    .font(IslandLayout.tabTitleFont)
                 Text("Choose a length")
-                    .font(.subheadline)
+                    .font(IslandLayout.tabDetailFont)
                     .foregroundStyle(.secondary)
             }
             .lineLimit(1)
             Spacer(minLength: 0)
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(TimerActivity.presets, id: \.self) { preset in
                     Button { timer.start(preset) } label: {
                         Text(preset, format: .units(allowed: [.minutes], width: .abbreviated))
@@ -112,15 +112,15 @@ private struct TimerCountdownTab: View {
         HStack(spacing: 14) {
             TimerTicks(timer: timer) { remaining, fraction in
                 HStack(spacing: 14) {
-                    TimerRing(fraction: fraction, lineWidth: 5)
-                        .frame(width: 44, height: 44)
+                    TimerRing(fraction: fraction, lineWidth: IslandLayout.tabRingWidth)
+                        .frame(width: IslandLayout.tabGlyphHeight, height: IslandLayout.tabGlyphHeight)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(TimerActivity.format(remaining))
                             .font(.system(size: 32, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                             .fixedSize()
                         Text(TimerActivity.endLine(for: timer.shown))
-                            .font(.subheadline)
+                            .font(IslandLayout.tabDetailFont)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }

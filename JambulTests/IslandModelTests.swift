@@ -166,7 +166,7 @@ struct IslandModelTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(model.presentation == .compact)
         #expect(model.compactActivities.map(\.id) == ["timer", "other"])
-        // Both sides as wide as the wider one needs, so the island stays centered on the notch.
+        // The right side is as wide as the first one needs.
         #expect(model.compactSlotWidth == 42)
     }
 

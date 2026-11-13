@@ -21,8 +21,11 @@ protocol IslandActivity: AnyObject, Observable {
     var priority: ActivityPriority { get }
     /// Whether the activity has something to show beside the notch right now.
     var isLive: Bool { get }
-    /// Width of each slot beside the notch in the compact presentation.
+    /// Width of its slot right of the notch in the compact presentation.
     var compactSlotWidth: CGFloat { get }
+    /// Width of its slot left of the notch, for `compactLeading` and `compactMinimal`: as wide as the right one unless
+    /// it says otherwise. Each side is only as wide as what it holds, so its content sits close to the notch.
+    var compactLeadingWidth: CGFloat { get }
     /// Its own color, on its glyphs, its tab and its buttons, so each activity reads as itself at a glance.
     var tint: Color { get }
     /// The symbol on its tab.
@@ -52,6 +55,7 @@ extension IslandActivity {
     var title: String { id }
     var priority: ActivityPriority { .normal }
     var compactSlotWidth: CGFloat { 36 }
+    var compactLeadingWidth: CGFloat { compactSlotWidth }
     var tint: Color { .white }
     var tabSymbol: String { "circle.fill" }
     var tabTint: Color? { isLive ? tint : nil }

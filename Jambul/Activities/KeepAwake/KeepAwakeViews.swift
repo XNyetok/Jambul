@@ -17,9 +17,9 @@ extension KeepAwakeActivity {
             .frame(width: Self.glyphSlotWidth, height: IslandLayout.compactGlyphHeight)
     }
 
-    /// The laptop on its tab: twice the one beside the notch, a whole multiple so its edges stay on the display's
-    /// pixels, and as wide as the timer's ring on its own tab.
-    static let tabLaptopSize = CGSize(width: LaptopView.size.width * 2, height: LaptopView.size.height * 2)
+    /// The laptop on its tab: three times the one beside the notch, a whole multiple so its edges stay on the display's
+    /// pixels, and nearly as tall as the timer's ring on its own tab.
+    static let tabLaptopSize = CGSize(width: LaptopView.size.width * 3, height: LaptopView.size.height * 3)
 
     /// The laptop from beside the notch, still, with its code showing: in Keep Awake's color while on, dim while off.
     /// The eye stood here first, but with Keep Awake off it was shut, and a shut eye read as a flat line.
@@ -29,7 +29,7 @@ extension KeepAwakeActivity {
                 .frame(width: Self.tabLaptopSize.width, height: Self.tabLaptopSize.height)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Keep Awake")
-                    .font(.headline)
+                    .font(IslandLayout.tabTitleFont)
                 Group {
                     if isOn, let since {
                         KeepAwakeSince(since: since, untilAgentsFinish: untilAgentsFinish)
@@ -37,7 +37,7 @@ extension KeepAwakeActivity {
                         Text("Display sleeps as usual")
                     }
                 }
-                .font(.subheadline)
+                .font(IslandLayout.tabDetailFont)
                 .foregroundStyle(.secondary)
             }
             .lineLimit(1)

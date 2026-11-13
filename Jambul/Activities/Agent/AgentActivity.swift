@@ -95,6 +95,8 @@ final class AgentActivity: IslandActivity {
     var title: String { String(localized: "Claude Code") }
     var tint: Color { UsageProvider.claude.brandColor }
     var tabSymbol: String { "chevron.left.forwardslash.chevron.right" }
+    /// Its logo.
+    var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight }
     var isLive: Bool { sessions.values.contains(where: \.isActive) }
     var priority: ActivityPriority { sessions.values.contains(where: \.needsYou) ? .high : .low }
     var showsHomeCard: Bool { isConnected && !shownSessions.isEmpty }
