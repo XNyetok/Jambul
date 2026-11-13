@@ -12,6 +12,12 @@ enum Motion {
     /// How late the system may fire the island's timers. Its default leeway added up to 40 ms to the hover intent.
     static let timerTolerance: Duration = .milliseconds(5)
 
+    /// With more than two activities live, how long each of those past the first shows left of the notch before the
+    /// next takes its place. One small change every few seconds, only while they take turns, like the eye's blink.
+    static let compactTurn: Duration = .seconds(6)
+    /// How late a turn may come, so the system can line it up with other work.
+    static let compactTurnTolerance: Duration = .milliseconds(500)
+
     /// How long the island takes to come back to rest. Hidden for a full-screen app, its window only goes once that
     /// motion is over, so a peek that came out shrinks away rather than vanishing.
     static let returnToRest: Duration = .milliseconds(500)
