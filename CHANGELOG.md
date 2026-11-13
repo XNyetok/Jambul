@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-13
+Fixes for clicks around the island and for Claude's usage, and a new tab order.
+
 ### Changed
 - The tabs go Home, Usage, Keep Awake and Timer, and Home's cards follow the same order, with the battery last.
 
@@ -35,6 +38,7 @@ The first public release.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
 
-[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/XNyetok/Jambul/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/XNyetok/Jambul/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/XNyetok/Jambul/releases/tag/v0.1.0
