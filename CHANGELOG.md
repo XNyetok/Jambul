@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-14
+A livelier island: the glyph beside the notch travels into the open island, activities take turns there, and Jambul now needs macOS 27.
+
 ### Added
 - As the island opens, the glyph beside the notch travels to its place on the tab or on Home, and back as it closes.
 - With more than two activities running, the ones that didn't fit beside the notch take turns on its left.
@@ -61,7 +64,8 @@ The first public release.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
 
-[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/XNyetok/Jambul/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/XNyetok/Jambul/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/XNyetok/Jambul/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/XNyetok/Jambul/compare/v0.1.0...v0.2.0
