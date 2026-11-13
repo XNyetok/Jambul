@@ -56,6 +56,7 @@ final class TimerActivity: NSObject, IslandActivity {
     var priority: ActivityPriority { .high }
     var tint: Color { .orange }
     var tabSymbol: String { "timer" }
+    var homeCardIsQuiet: Bool { state == .idle }
     var isLive: Bool { state != .idle }
 
     private(set) var state = State.idle {

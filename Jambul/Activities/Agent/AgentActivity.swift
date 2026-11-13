@@ -94,7 +94,7 @@ final class AgentActivity: IslandActivity {
     let id = "agent"
     var title: String { String(localized: "Claude Code") }
     var tint: Color { UsageProvider.claude.brandColor }
-    var tabSymbol: String { "terminal.fill" }
+    var tabSymbol: String { "chevron.left.forwardslash.chevron.right" }
     var isLive: Bool { sessions.values.contains(where: \.isActive) }
     var priority: ActivityPriority { sessions.values.contains(where: \.needsYou) ? .high : .low }
     var showsHomeCard: Bool { isConnected && !shownSessions.isEmpty }

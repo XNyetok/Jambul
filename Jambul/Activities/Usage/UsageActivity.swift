@@ -21,8 +21,13 @@ final class UsageActivity: IslandActivity {
 
     let id = "usage"
     var title: String { String(localized: "Usage") }
-    var tint: Color { .purple }
-    var tabSymbol: String { "gauge.with.dots.needle.33percent" }
+    var tabSymbol: String { "gauge.with.needle.fill" }
+    /// Yellow from 80% and red from 95%, like the numbers on the tab.
+    var tabTint: Color? {
+        let now = currentDate
+        let fullest = enabled.compactMap { readings[$0]?.fullest(at: now)?.used(at: now) }.max() ?? 0
+        return fullest >= 0.95 ? .red : fullest >= 0.8 ? .yellow : nil
+    }
     var priority: ActivityPriority { .low }
 
     /// The subscriptions the owner turned on, in the order the tab shows them.

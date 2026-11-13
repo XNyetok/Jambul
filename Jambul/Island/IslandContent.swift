@@ -286,9 +286,9 @@ struct ExpandedContent: View {
 }
 
 /// One button per activity, split between the two sides of the camera (`IslandLayout.tabSides`): each side lines up
-/// with the edge of the content below it, the left on its left and the right on its right. A live activity's symbol
-/// shows in its color even while another tab is chosen; the chosen tab sits on a highlight that slides over as the
-/// choice changes, across the camera too.
+/// with the edge of the content below it, the left on its left and the right on its right. A symbol shows in color
+/// while its activity has something going on (`tabTint`), chosen or not; the chosen tab sits on a highlight that
+/// slides over as the choice changes, across the camera too.
 struct IslandTabBar: View {
     let tabs: [any IslandActivity]
     let selected: String?
@@ -322,8 +322,8 @@ struct IslandTabGroup: View {
             ForEach(tabs, id: \.id) { activity in
                 let isSelected = activity.id == selected
                 Button { select(activity.id) } label: {
-                    IslandTabLabel(symbol: activity.tabSymbol, tint: activity.tint, isSelected: isSelected,
-                                   isLive: activity.isLive, width: buttonWidth)
+                    IslandTabLabel(symbol: activity.tabSymbol, tint: activity.tabTint, isSelected: isSelected,
+                                   width: buttonWidth)
                         .background {
                             if isSelected {
                                 Capsule()
@@ -340,19 +340,19 @@ struct IslandTabGroup: View {
     }
 }
 
-/// A tab's symbol: in the activity's color while chosen or live, otherwise dim, and a little brighter under the pointer.
+/// A tab's symbol: in the activity's color while it has something going on, otherwise white on the chosen tab and dim on
+/// the others, a little brighter under the pointer. Color says what is live; the highlight says which tab is chosen.
 private struct IslandTabLabel: View {
     let symbol: String
-    let tint: Color
+    let tint: Color?
     let isSelected: Bool
-    let isLive: Bool
     let width: CGFloat
     @State private var isHovered = false
 
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(isSelected || isLive ? tint : .white.opacity(isHovered ? 0.62 : 0.36))
+            .foregroundStyle(tint ?? .white.opacity(isSelected ? 1 : isHovered ? 0.72 : 0.5))
             .frame(width: width, height: IslandLayout.tabButtonSize.height)
             .onHover { isHovered = $0 }
             .animation(Motion.tabHover, value: isHovered)
