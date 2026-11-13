@@ -4,6 +4,12 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+- Claude Code sessions: see which sessions work, need you or are done beside the notch and in their own tab, with a peek when one needs your permission or an answer, finishes or stops on an error, and keep the display awake until they finish.
+
+### Changed
+- The open island's tabs sit on both sides of the camera, and in full screen the day and time show right below it.
+
 ### Fixed
 - The open island no longer has a shadow, which ended in a visible line a little below it.
 - Antigravity's usage now shows up after login, when Jambul starts before the network is ready.

@@ -10,7 +10,7 @@ private final class Inbox {
 /// Sends through macOS's own `nc`, as the status line does. The socket lives in a folder of its own under the temporary
 /// folder, whose short path fits a Unix socket.
 @MainActor
-struct UsageSocketTests {
+struct InputSocketTests {
     private let folder = URL(filePath: NSTemporaryDirectory()).appending(path: "jt-\(UUID().uuidString.prefix(8))")
 
     private func send(_ data: Data, to path: String) throws {
@@ -36,7 +36,7 @@ struct UsageSocketTests {
     @Test func handsOverEachInput() async throws {
         let inbox = Inbox()
         let path = folder.appending(path: "u.sock").path
-        let socket = UsageSocket(path: path) { inbox.inputs.append($0) }
+        let socket = InputSocket(path: path) { inbox.inputs.append($0) }
         try socket.start()
         defer {
             socket.stop()
@@ -50,9 +50,33 @@ struct UsageSocketTests {
         #expect(inbox.inputs == [first, second])
     }
 
+    /// Too large an input is dropped, unless the socket keeps its start, as the hooks' does: what comes first there says
+    /// which session did what.
+    @Test func tooLargeAnInputIsDroppedOrCutToItsStart() async throws {
+        let large = Data(repeating: 0x41, count: InputSocket.maxInput + 10_000)
+        let dropped = Inbox(), kept = Inbox()
+        let dropping = InputSocket(path: folder.appending(path: "d.sock").path) { dropped.inputs.append($0) }
+        let keeping = InputSocket(path: folder.appending(path: "k.sock").path, keepsStartOfLargeInput: true) {
+            kept.inputs.append($0)
+        }
+        try dropping.start()
+        try keeping.start()
+        defer {
+            dropping.stop()
+            keeping.stop()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        try send(large, to: dropping.path)
+        try send(large, to: keeping.path)
+        try await waitFor(kept, count: 1)
+        #expect(kept.inputs == [large.prefix(InputSocket.maxInput)])
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(dropped.inputs.isEmpty)
+    }
+
     @Test func onlyTheOwnerCanReachIt() throws {
         let path = folder.appending(path: "u.sock").path
-        let socket = UsageSocket(path: path) { _ in }
+        let socket = InputSocket(path: path) { _ in }
         try socket.start()
         defer {
             socket.stop()
@@ -65,7 +89,7 @@ struct UsageSocketTests {
     }
 
     @Test func refusesAPathTooLongForASocket() {
-        let socket = UsageSocket(path: folder.appending(path: String(repeating: "a", count: 120)).path) { _ in }
+        let socket = InputSocket(path: folder.appending(path: String(repeating: "a", count: 120)).path) { _ in }
         #expect(throws: POSIXError.self) { try socket.start() }
         // Nothing on disk changed.
         #expect(!FileManager.default.fileExists(atPath: folder.path))

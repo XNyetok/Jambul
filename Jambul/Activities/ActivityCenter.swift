@@ -42,6 +42,16 @@ final class ActivityCenter {
         onPeek?(peek)
     }
 
+    /// Called when an activity takes back the peeks it has waiting.
+    @ObservationIgnored var onWithdrawPeeks: (@MainActor (String, String?) -> Void)?
+
+    /// Takes back the peeks from `source` still waiting for their turn, for news that stopped being true before anyone
+    /// saw it, like an agent asking for permission that was given in the terminal meanwhile. With a `topic`, only those
+    /// about it. One showing stays.
+    func withdrawPeeks(from source: String, topic: String? = nil) {
+        onWithdrawPeeks?(source, topic)
+    }
+
     /// Called by the island as it starts showing a peek, for an activity that only counts news as told once seen.
     @ObservationIgnored var onPeekShown: (@MainActor (Peek) -> Void)?
 

@@ -48,8 +48,15 @@ struct PeekContent: View {
         VStack(spacing: 6) {
             HStack(spacing: 10) {
                 PeekIcon(peek: peek)
-                title
-                    .font(.system(size: 13, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    title
+                        .font(.system(size: 13, weight: .semibold))
+                    if let subtitle = peek.subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer(minLength: 8)
                 if let detail = peek.detail {
                     Text(detail)
@@ -103,7 +110,9 @@ private struct PeekIcon: View {
     }
 
     @ViewBuilder private var icon: some View {
-        if let logo = peek.logo {
+        if peek.motion == .happy || peek.motion == .sad {
+            PeekEye(isHappy: peek.motion == .happy, tint: peek.tint)
+        } else if let logo = peek.logo {
             Image(logo)
                 .resizable()
                 .interpolation(.high)
@@ -138,6 +147,49 @@ private struct PeekIcon: View {
         case .bounce: return Motion.Usage.bounceOffsets
         default: return [1]
         }
+    }
+}
+
+/// Keep Awake's eye on a peek, saying how something ended: it closes into a smile, or half closes and droops. Once, as
+/// the peek comes out, and then it holds still.
+private struct PeekEye: View {
+    let isHappy: Bool
+    let tint: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var felt = false
+
+    var body: some View {
+        ZStack {
+            Image(systemName: "eye.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tint)
+                .scaleEffect(x: 1, y: felt ? (isHappy ? Motion.eyeShut : Motion.Agent.sadOpenness) : 1)
+                .opacity(felt && isHappy ? 0 : 1)
+            if isHappy {
+                // The closed eye of a smile, curving up.
+                PeekSmile()
+                    .trim(from: 0, to: felt ? 1 : 0)
+                    .stroke(tint, style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+                    .frame(width: 16, height: 7)
+            }
+        }
+        .rotationEffect(.degrees(felt && !isHappy ? Motion.Agent.sadTilt : 0))
+        .offset(y: felt && !isHappy ? Motion.Agent.sadDrop : 0)
+        .frame(width: 22, height: 18)
+        .onAppear {
+            guard !reduceMotion else { return felt = true }
+            withAnimation(Motion.Agent.feel) { felt = true }
+        }
+    }
+}
+
+/// An arc curving up across its frame, like a closed, smiling eye.
+private struct PeekSmile: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY), control: CGPoint(x: rect.midX, y: rect.minY - rect.height))
+        return path
     }
 }
 
@@ -187,31 +239,31 @@ private struct PeekProgress: View {
     }
 }
 
-/// The open island: the tabs beside the notch on the left, the time on the right while a full-screen app hides the
-/// menu bar's, and below the notch the chosen activity's tab. One activity at a time, so two never mix on one screen;
-/// Home, the first tab, sums them all up.
+/// The open island: the tabs on both sides of the camera, the day and time right below it while a full-screen app
+/// hides the menu bar's, and below that the chosen activity's tab. One activity at a time, so two never mix on one
+/// screen; Home, the first tab, sums them all up.
 struct ExpandedContent: View {
     let model: IslandModel
 
     var body: some View {
         let notch = model.notch
         let tabs = model.tabs
+        let sides = IslandLayout.tabSides(count: tabs.count)
+        let showsClock = model.isFullScreen
         ZStack(alignment: .top) {
-            HStack(spacing: 0) {
-                IslandTabBar(tabs: tabs, selected: model.selectedTab,
-                             buttonWidth: IslandLayout.tabButtonWidth(count: tabs.count, notch: notch)) {
-                    model.selectTab($0)
-                }
-                Spacer(minLength: 0)
-                if model.isFullScreen {
-                    // Held to the room beside the notch, so the clock picks a face that fits there.
-                    IslandClock()
-                        .frame(width: IslandLayout.besideNotchRoom(notch), alignment: .trailing)
-                        .transition(.opacity)
-                }
+            IslandTabBar(tabs: tabs, selected: model.selectedTab,
+                         buttonWidth: IslandLayout.tabButtonWidth(count: sides.leading, notch: notch)) {
+                model.selectTab($0)
             }
             .padding(.horizontal, IslandLayout.expandedContentInset)
             .frame(height: notch.size.height)
+
+            if showsClock {
+                IslandClock()
+                    .frame(height: IslandLayout.clockRowHeight)
+                    .padding(.top, notch.size.height + IslandLayout.expandedContentTopGap)
+                    .transition(.opacity)
+            }
 
             // Centered in what is left below the notch. Each tab is a row centered on its glyph, so the glyph sits in
             // the same place on every tab, however tall the text beside it.
@@ -224,7 +276,8 @@ struct ExpandedContent: View {
             }
             .environment(\.selectIslandTab, SelectTabAction { model.selectTab($0, replacingWhatWasClicked: true) })
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.top, notch.size.height + IslandLayout.expandedContentTopGap)
+            .padding(.top, notch.size.height + IslandLayout.expandedContentTopGap
+                     + (showsClock ? IslandLayout.clockRowHeight : 0))
             .padding(.bottom, IslandLayout.expandedContentBottomInset)
             .padding(.horizontal, IslandLayout.expandedContentInset)
         }
@@ -232,8 +285,10 @@ struct ExpandedContent: View {
     }
 }
 
-/// One button per activity beside the notch. A live activity's symbol shows in its color even while another tab is
-/// chosen; the chosen tab sits on a highlight that slides over as the choice changes.
+/// One button per activity, split between the two sides of the camera (`IslandLayout.tabSides`): each side lines up
+/// with the edge of the content below it, the left on its left and the right on its right. A live activity's symbol
+/// shows in its color even while another tab is chosen; the chosen tab sits on a highlight that slides over as the
+/// choice changes, across the camera too.
 struct IslandTabBar: View {
     let tabs: [any IslandActivity]
     let selected: String?
@@ -241,6 +296,26 @@ struct IslandTabBar: View {
     var buttonWidth = IslandLayout.tabButtonSize.width
     let select: (String) -> Void
     @Namespace private var highlight
+
+    var body: some View {
+        let sides = IslandLayout.tabSides(count: tabs.count)
+        HStack(spacing: 0) {
+            IslandTabGroup(tabs: Array(tabs.prefix(sides.leading)), selected: selected, buttonWidth: buttonWidth,
+                           highlight: highlight, select: select)
+            Spacer(minLength: 0)
+            IslandTabGroup(tabs: Array(tabs.suffix(sides.trailing)), selected: selected, buttonWidth: buttonWidth,
+                           highlight: highlight, select: select)
+        }
+    }
+}
+
+/// The tabs on one side of the camera.
+struct IslandTabGroup: View {
+    let tabs: [any IslandActivity]
+    let selected: String?
+    var buttonWidth = IslandLayout.tabButtonSize.width
+    let highlight: Namespace.ID
+    let select: (String) -> Void
 
     var body: some View {
         HStack(spacing: IslandLayout.tabButtonSpacing) {
@@ -305,10 +380,9 @@ struct IslandClock: View {
     }
 }
 
-/// What `IslandClock` shows at `date`, like "Mon 2  09:41", as the person's locale writes it. The month doesn't fit
-/// beside the notch: with it, a day like "Wed 20 May" took 121 pt where there are 106.5 (measured). In the 24-hour
-/// locales measured, the day and date fit (99 pt at most), but a 12-hour clock's AM and PM can push them over (112 pt
-/// in US English, 120 in Korean), so the date gives way first, then the day, never the time.
+/// What `IslandClock` shows at `date`, like "Mon 2  09:41", as the person's locale writes it, centered below the camera.
+/// It once sat beside the notch, where a 12-hour clock's AM and PM could push the day and date past the 106.5 pt there;
+/// below the camera they fit, but in a narrower room the date still gives way first, then the day, never the time.
 struct IslandClockFace: View {
     let date: Date
 

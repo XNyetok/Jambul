@@ -119,6 +119,7 @@ final class IslandModel {
         if self.presentation == .expanded { selectedTab = tabOnOpening }
         activities.onLiveActivityChange = { [weak self] in self?.liveActivityDidChange() }
         activities.onPeek = { [weak self] in self?.show($0) }
+        activities.onWithdrawPeeks = { [weak self] in self?.withdrawPeeks(from: $0, topic: $1) }
     }
 
     /// The most important live activity.
@@ -140,7 +141,9 @@ final class IslandModel {
 
     /// The island's size and corners as it is drawn now, for the view and for finding the pointer on it alike.
     var layout: IslandLayout {
-        IslandLayout(presentation, notch: notch, compactSlotWidth: compactSlotWidth)
+        IslandLayout(presentation, notch: notch, compactSlotWidth: compactSlotWidth,
+                     peekHasSubtitle: presentation == .peek && peek?.subtitle != nil,
+                     showsClock: presentation == .expanded && isFullScreen)
     }
 
     /// Shows another activity's tab in the open island, from a click on its tab or on its card on Home. The island
@@ -221,15 +224,15 @@ final class IslandModel {
     }
 
     func show(_ peek: Peek) {
-        // Newer news from the same activity replaces any of its own still waiting.
-        waiting.removeAll { $0.peek.source == peek.source }
+        // Newer news from the same activity, on the same topic, replaces any still waiting.
+        waiting.removeAll { $0.peek.isSameNews(as: peek) }
         // With nobody to see it, a peek the owner must see waits for them, and any other would be missed anyway.
         guard canBeSeen() else {
             if peek.mustBeSeen { line(up: peek, until: nil) }
             return
         }
         guard !isHidden || peek.mustBeSeen else { return }
-        if presentation == .peek, let showing = self.peek, showing.mustBeSeen, showing.source != peek.source {
+        if presentation == .peek, let showing = self.peek, showing.mustBeSeen, !showing.isSameNews(as: peek) {
             // Never cut short a peek the owner must see: this one follows it.
             line(up: peek, until: peek.mustBeSeen ? nil : max(peekEnds ?? .now, .now) + peek.duration)
             return
@@ -251,6 +254,11 @@ final class IslandModel {
             return
         }
         presentPeek(peek)
+    }
+
+    /// Drops the peeks from `source` still waiting, or only those about `topic`; one showing stays for its time.
+    func withdrawPeeks(from source: String, topic: String? = nil) {
+        waiting.removeAll { $0.peek.source == source && (topic == nil || $0.peek.topic == topic) }
     }
 
     /// Shows the next waiting peek if someone can see the island now and it is at rest. Called whenever that may have

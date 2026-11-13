@@ -23,6 +23,7 @@ struct PreferencesTests {
             #expect(preferences.hapticTaps == 2)
             #expect(!preferences.hidesInFullScreen)
             #expect(preferences.timerSound == "Glass")
+            #expect(!preferences.showsAgentSessions)
         }
     }
 
@@ -33,11 +34,13 @@ struct PreferencesTests {
             preferences.hapticTaps = 3
             preferences.hidesInFullScreen = true
             preferences.timerSound = "Hero"
+            preferences.showsAgentSessions = true
 
             let relaunched = Preferences(defaults: defaults)
             #expect(relaunched.hoverSpeed == .fast)
             #expect(relaunched.hapticTaps == 3)
             #expect(relaunched.hidesInFullScreen)
+            #expect(relaunched.showsAgentSessions)
             #expect(relaunched.timerSound == "Hero")
         }
     }

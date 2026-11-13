@@ -54,6 +54,12 @@ final class Preferences {
         didSet { save(claudeStatusLineAgreed, for: .claudeStatusLineAgreed) }
     }
 
+    /// Whether the island follows Claude Code's sessions, through hooks the owner agreed to add to Claude Code's
+    /// settings. Turning it off takes them out again.
+    var showsAgentSessions: Bool {
+        didSet { save(showsAgentSessions, for: .showsAgentSessions) }
+    }
+
     /// Called after any setting changes.
     @ObservationIgnored var onChange: (@MainActor () -> Void)?
 
@@ -74,10 +80,12 @@ final class Preferences {
             .map { Set($0.compactMap(UsageProvider.init(rawValue:))) }
             ?? Set(UsageProvider.allCases.filter(\.isOnByDefault))
         claudeStatusLineAgreed = defaults.bool(forKey: Key.claudeStatusLineAgreed.rawValue)
+        showsAgentSessions = defaults.bool(forKey: Key.showsAgentSessions.rawValue)
     }
 
     private enum Key: String {
         case hoverSpeed, hapticTaps, hidesInFullScreen, timerSound, usageProviders, claudeStatusLineAgreed
+        case showsAgentSessions
     }
 
     private func save(_ value: Any, for key: Key) {

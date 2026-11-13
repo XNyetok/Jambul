@@ -53,6 +53,13 @@ struct NotchGeometryTests {
         #expect(peek.maxY == 956)
     }
 
+    @Test func aPeekWithASecondLineIsALineTaller() {
+        let one = IslandLayout(.peek, notch: macBookAir.metrics, compactSlotWidth: nil)
+        let two = IslandLayout(.peek, notch: macBookAir.metrics, compactSlotWidth: nil, peekHasSubtitle: true)
+        #expect(two.size.height == one.size.height + IslandLayout.peekSubtitleHeight)
+        #expect(two.size.width == one.size.width)
+    }
+
     @Test func aNotchCenteredOnAHalfPointWidensThePanelInsteadOfShiftingIt() {
         let geometry = NotchGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1470, height: 956),
                                      visibleFrame: CGRect(x: 0, y: 0, width: 1470, height: 923), safeAreaTop: 32,

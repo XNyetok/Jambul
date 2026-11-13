@@ -25,6 +25,11 @@ final class KeepAwakeActivity: IslandActivity {
 
     /// When it was turned on; nil while off.
     private(set) var since: Date?
+    /// On only until Claude Code's sessions finish their turns, rather than until the owner turns it off.
+    private(set) var untilAgentsFinish = false
+    /// Whether a Claude Code session is in a turn now, for offering to stay on until it finishes. Read inside views, so
+    /// they follow it.
+    @ObservationIgnored var agentsAreWorking: @MainActor () -> Bool = { false }
     /// True for the moment the eye takes to close after it is turned off, before it leaves the island.
     private(set) var isClosing = false
 
@@ -63,18 +68,40 @@ final class KeepAwakeActivity: IslandActivity {
         restore()
     }
 
-    func start() {
+    /// - Parameter untilAgentsFinish: Turns off by itself once Claude Code's sessions finish their turns.
+    func start(untilAgentsFinish: Bool = false) {
         guard !isOn else { return }
         closeTask?.cancel()
         isClosing = false
+        self.untilAgentsFinish = untilAgentsFinish
+        defaults.set(untilAgentsFinish, forKey: Self.untilAgentsFinishKey)
         begin(since: now())
-        Logger.activities.notice("keep awake on")
+        Logger.activities.notice("keep awake on\(untilAgentsFinish ? " until agents finish" : "", privacy: .public)")
+    }
+
+    /// Jambul stopped following Claude Code's sessions: it stays on, now until the owner turns it off.
+    func stopWaitingForAgents() {
+        guard untilAgentsFinish else { return }
+        untilAgentsFinish = false
+        defaults.removeObject(forKey: Self.untilAgentsFinishKey)
+    }
+
+    /// Claude Code's last working session finished its turn: off, if it was on only until then.
+    func agentsFinished() {
+        guard isOn, untilAgentsFinish else { return }
+        Logger.activities.notice("keep awake off, agents finished")
+        activities?.peek(Peek(symbol: "eye.slash.fill", tint: tint, title: String(localized: "Keep Awake off"),
+                              detail: String(localized: "Claude Code finished"), duration: Self.offPeekDuration,
+                              source: id))
+        stop()
     }
 
     /// Turns it on as if it had been on since `date`, for the Debug menu and tests.
     func start(since date: Date) {
         closeTask?.cancel()
         isClosing = false
+        untilAgentsFinish = false
+        defaults.removeObject(forKey: Self.untilAgentsFinishKey)
         begin(since: date)
     }
 
@@ -114,9 +141,15 @@ final class KeepAwakeActivity: IslandActivity {
 
     /// What its tab says about it: when it was turned on, and from a minute on, for how long, like "On since 09:41" and
     /// then "On since 09:41 · 1h 05m". Never "0m", which read as nothing worth showing.
-    static func sinceLine(since: Date, at date: Date, locale: Locale = .autoupdatingCurrent) -> String {
-        let time = since.formatted(.dateTime.hour().minute().locale(locale))
+    /// On until Claude Code finishes, it says so in place of when, like "Until Claude Code finishes · 12m".
+    static func sinceLine(since: Date, at date: Date, untilAgentsFinish: Bool = false,
+                          locale: Locale = .autoupdatingCurrent) -> String {
         let seconds = date.timeIntervalSince(since)
+        if untilAgentsFinish {
+            guard seconds >= 60 else { return String(localized: "Until Claude Code finishes") }
+            return String(localized: "Until Claude Code finishes · \(elapsed(seconds))")
+        }
+        let time = since.formatted(.dateTime.hour().minute().locale(locale))
         guard seconds >= 60 else { return String(localized: "On since \(time)") }
         return String(localized: "On since \(time) · \(elapsed(seconds))")
     }
@@ -157,6 +190,7 @@ final class KeepAwakeActivity: IslandActivity {
             forget()
             return
         }
+        untilAgentsFinish = defaults.bool(forKey: Self.untilAgentsFinishKey)
         begin(since: saved)
         Logger.activities.notice("keep awake back on after a relaunch")
     }
@@ -164,6 +198,7 @@ final class KeepAwakeActivity: IslandActivity {
     private func forget() {
         defaults.removeObject(forKey: Self.sinceKey)
         defaults.removeObject(forKey: Self.bootSessionKey)
+        defaults.removeObject(forKey: Self.untilAgentsFinishKey)
     }
 
     private func holdScreen(_ hold: Bool) {
@@ -178,4 +213,5 @@ final class KeepAwakeActivity: IslandActivity {
 
     private static let sinceKey = "keepAwake.since"
     private static let bootSessionKey = "keepAwake.bootSession"
+    private static let untilAgentsFinishKey = "keepAwake.untilAgentsFinish"
 }

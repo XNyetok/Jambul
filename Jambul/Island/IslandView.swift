@@ -31,8 +31,9 @@ struct IslandView: View {
                 }
                 if presentation == .expanded {
                     // Laid out at full size and revealed by the clip, so it doesn't reflow as the island grows.
+                    let size = IslandLayout.expandedSize(showsClock: model.isFullScreen)
                     ExpandedContent(model: model)
-                        .frame(width: IslandLayout.expandedSize.width, height: IslandLayout.expandedSize.height)
+                        .frame(width: size.width, height: size.height)
                         .transition(Motion.contentTransition)
                 }
             }
@@ -93,7 +94,8 @@ private func previewActivities(timer running: Bool = false, keepAwake on: Bool =
                                       bootSession: nil, holdsScreen: false)
     let battery = BatteryActivity(activities: activities)
     let usage = UsageActivity(activities: activities)
-    activities.registerJambulsActivities(home: home, usage: usage, keepAwake: keepAwake, timer: timer, battery: battery)
+    activities.registerJambulsActivities(home: home, usage: usage, agent: AgentActivity(activities: activities),
+                                         keepAwake: keepAwake, timer: timer, battery: battery)
     if running { timer.start(.seconds(25 * 60)) }
     if on { keepAwake.start(since: .now.addingTimeInterval(-65 * 60)) } else { keepAwake.stop() }
     battery.update(PowerState(percent: 76, isOnExternalPower: false))

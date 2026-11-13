@@ -5,7 +5,9 @@ struct SettingsView: View {
     @Bindable var preferences: Preferences
     @Bindable var loginItem: LoginItem
     var usage: UsageActivity?
+    var agent: AgentActivity?
     @State private var confirmingClaude = false
+    @State private var confirmingSessions = false
     /// Whether the question about connecting Claude came from turning it on, so No turns it off again.
     @State private var confirmingFromToggle = false
 
@@ -78,6 +80,19 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle(isOn: showsSessions) {
+                    Text("Claude Code sessions")
+                    Text(sessionsStatus)
+                }
+            } header: {
+                Text("Claude Code")
+            } footer: {
+                Text("Shows when a session works, needs you or is done, and lets Keep Awake stay on until it finishes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 ForEach(UsageProvider.allCases, id: \.self) { provider in
                     Toggle(isOn: isOn(provider)) {
                         HStack(spacing: 10) {
@@ -120,6 +135,12 @@ struct SettingsView: View {
         } message: {
             Text("Jambul adds itself to Claude Code’s status line in ~/.claude/settings.json to read your usage limits. Your status line looks the same, and turning Claude off puts it back exactly as it was.")
         }
+        .alert("Connect Claude Code sessions?", isPresented: $confirmingSessions) {
+            Button("Connect") { preferences.showsAgentSessions = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Jambul adds hooks to ~/.claude/settings.json that tell it what each session does. Your other hooks stay as they are, sessions you start from now on show, and turning this off takes Jambul’s hooks out again.")
+        }
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -143,6 +164,20 @@ extension SettingsView {
                 preferences.usageProviders.remove(provider)
             }
         }
+    }
+
+    /// Asks before adding the hooks; turning it off takes them out.
+    private var showsSessions: Binding<Bool> {
+        Binding {
+            preferences.showsAgentSessions
+        } set: { on in
+            if on { confirmingSessions = true } else { preferences.showsAgentSessions = false }
+        }
+    }
+
+    private var sessionsStatus: String {
+        guard preferences.showsAgentSessions else { return String(localized: "Off · reads Claude Code’s hooks") }
+        return agent?.problem ?? String(localized: "Connected · sessions you start from now on show")
     }
 
     private var needsConnectingClaude: Bool {

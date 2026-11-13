@@ -32,7 +32,7 @@ extension KeepAwakeActivity {
                     .font(.headline)
                 Group {
                     if isOn, let since {
-                        KeepAwakeSince(since: since)
+                        KeepAwakeSince(since: since, untilAgentsFinish: untilAgentsFinish)
                     } else {
                         Text("Display sleeps as usual")
                     }
@@ -53,6 +53,16 @@ extension KeepAwakeActivity {
                 .buttonStyle(.islandIcon())
                 .accessibilityLabel(Text("Turn Off Keep Awake"))
             } else {
+                // While Claude Code works, Keep Awake can turn itself off as it finishes.
+                if agentsAreWorking() {
+                    // Asked again on the click: the last turn may have ended since this was drawn, and then there's
+                    // nothing to stay on for.
+                    Button("Until Done") {
+                        if self.agentsAreWorking() { self.start(untilAgentsFinish: true) }
+                    }
+                        .buttonStyle(.island(tint: tint))
+                        .accessibilityLabel(Text("Keep Awake Until Claude Code Finishes"))
+                }
                 Button("Turn On") { self.start() }
                     .buttonStyle(.island(tint: tint))
             }
@@ -86,6 +96,7 @@ extension KeepAwakeActivity {
 /// (`KeepAwakeActivity.onFor`), redrawn as each minute of it passes, and only while someone can see the island.
 struct KeepAwakeSince: View {
     let since: Date
+    var untilAgentsFinish = false
     /// Only how long, for its card on Home, which has no room for when.
     var isShort = false
     @Environment(\.islandIsVisible) private var isVisible
@@ -101,6 +112,7 @@ struct KeepAwakeSince: View {
     }
 
     private func line(at date: Date) -> String {
-        isShort ? KeepAwakeActivity.onFor(since: since, at: date) : KeepAwakeActivity.sinceLine(since: since, at: date)
+        isShort ? KeepAwakeActivity.onFor(since: since, at: date)
+            : KeepAwakeActivity.sinceLine(since: since, at: date, untilAgentsFinish: untilAgentsFinish)
     }
 }

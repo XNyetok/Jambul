@@ -42,8 +42,8 @@ final class HomeTests {
         let keepAwake = KeepAwakeActivity(activities: activities, defaults: defaults, bootSession: nil, holdsScreen: false)
         let battery = BatteryActivity(activities: activities)
         let usage = UsageActivity(activities: activities)
-        activities.registerJambulsActivities(home: home, usage: usage, keepAwake: keepAwake, timer: timer,
-                                             battery: battery)
+        activities.registerJambulsActivities(home: home, usage: usage, agent: AgentActivity(activities: activities),
+                                             keepAwake: keepAwake, timer: timer, battery: battery)
         var cards: [String] { activities.activities.filter(\.showsHomeCard).map(\.id) }
 
         // Before the battery's first reading, as on a Mac without one, and with every subscription turned off.
