@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-13
+Claude Code's sessions in the island, and tabs on both sides of the camera.
+
 ### Added
 - Claude Code sessions: see which sessions work, need you or are done beside the notch and in their own tab, with a peek when one needs your permission or an answer, finishes or stops on an error, and keep the display awake until they finish.
 
@@ -48,7 +51,8 @@ The first public release.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
 
-[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/XNyetok/Jambul/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/XNyetok/Jambul/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/XNyetok/Jambul/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/XNyetok/Jambul/releases/tag/v0.1.0
