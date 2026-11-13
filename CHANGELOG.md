@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+- As the island opens, the glyph beside the notch travels to its place on the tab or on Home, and back as it closes.
+
 ### Changed
 - Jambul now needs macOS 27 or later.
 - Tab symbols are easier to read and take color only while their activity is running, cards on Home dim while theirs is off, and the Usage tab's columns line up.

@@ -26,6 +26,9 @@ protocol IslandActivity: AnyObject, Observable {
     /// Width of its slot left of the notch, for `compactLeading` and `compactMinimal`: as wide as the right one unless
     /// it says otherwise. Each side is only as wide as what it holds, so its content sits close to the notch.
     var compactLeadingWidth: CGFloat { get }
+    /// What the glyph left of the notch is, if the open island shows it too, on the activity's tab or its card on Home
+    /// (`islandGlyph`). As the island opens the glyph travels there rather than fading out beside the notch.
+    var compactGlyph: String? { get }
     /// Its own color, on its glyphs, its tab and its buttons, so each activity reads as itself at a glance.
     var tint: Color { get }
     /// The symbol on its tab.
@@ -56,6 +59,7 @@ extension IslandActivity {
     var priority: ActivityPriority { .normal }
     var compactSlotWidth: CGFloat { 36 }
     var compactLeadingWidth: CGFloat { compactSlotWidth }
+    var compactGlyph: String? { nil }
     var tint: Color { .white }
     var tabSymbol: String { "circle.fill" }
     var tabTint: Color? { isLive ? tint : nil }

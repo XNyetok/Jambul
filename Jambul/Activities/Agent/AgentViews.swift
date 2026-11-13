@@ -198,6 +198,7 @@ private struct AgentRow: View {
     var body: some View {
         HStack(spacing: 12) {
             AgentStatusCircle(state: session.state, tint: tint)
+                .islandGlyph(AgentActivity.glyph(of: session))
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(session.project)
@@ -249,6 +250,7 @@ private struct AgentHomeCard: View {
         if let session = activity.shownSessions.first {
             HomeCardContent(Text(session.project)) {
                 AgentStatusCircle(state: session.state, tint: activity.tint, size: 15)
+                    .islandGlyph(AgentActivity.glyph(of: session))
             } value: {
                 value(session)
             }

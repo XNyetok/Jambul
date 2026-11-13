@@ -31,6 +31,10 @@ final class UsageActivity: IslandActivity {
     var priority: ActivityPriority { .low }
     /// Its logo.
     var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight }
+    /// The logo of the subscription nearest its limit, which the tab and the card on Home show too.
+    var compactGlyph: String? { (pressing?.provider).map(Self.glyph) }
+
+    static func glyph(of provider: UsageProvider) -> String { "usage.\(provider.rawValue)" }
 
     /// The subscriptions the owner turned on, in the order the tab shows them.
     var enabled: [UsageProvider] = [] {

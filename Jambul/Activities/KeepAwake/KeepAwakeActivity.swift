@@ -23,6 +23,8 @@ final class KeepAwakeActivity: IslandActivity {
     var tint: Color { .cyan }
     var tabSymbol: String { "eye.fill" }
     var homeCardIsQuiet: Bool { !isOn }
+    /// The eye, which its card on Home shows too.
+    var compactGlyph: String? { "keepAwake.eye" }
 
     /// When it was turned on; nil while off.
     private(set) var since: Date?

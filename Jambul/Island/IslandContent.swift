@@ -9,14 +9,18 @@ struct CompactContent: View {
     let notch: NotchMetrics
     let leadingWidth: CGFloat
     let slotWidth: CGFloat
+    @Environment(\.islandGlyphs) private var glyphs
 
     var body: some View {
         // Each slot is known by what fills it, so a slot that keeps its content holds still while the other changes.
         HStack(spacing: 0) {
             ZStack(alignment: .leading) {
-                leading
-                    .id(leadingID)
-                    .transition(Motion.contentTransition)
+                // In the island the glyph is drawn over the content, where this slot is (`IslandGlyphFlyer`).
+                if glyphs == nil {
+                    Self.leading(of: activities)
+                        .id(Self.leadingID(of: activities))
+                        .transition(Motion.contentTransition)
+                }
             }
             .frame(width: leadingWidth, alignment: .leading)
             Color.clear
@@ -33,13 +37,19 @@ struct CompactContent: View {
         .foregroundStyle(.white)
     }
 
-    private var leading: AnyView {
+    /// What shows left of the notch: the second activity's glyph, or the only one's.
+    static func leading(of activities: [any IslandActivity]) -> AnyView {
         activities.count > 1 ? activities[1].compactMinimal : AnyView(activities[0].compactLeading)
     }
 
     /// The minimal glyph and an activity's own leading view differ even for the same activity.
-    private var leadingID: String {
+    static func leadingID(of activities: [any IslandActivity]) -> String {
         activities.count > 1 ? "\(activities[1].id).minimal" : activities[0].id
+    }
+
+    /// What that glyph is, if the open island shows it too.
+    static func leadingGlyph(of activities: [any IslandActivity]) -> String? {
+        (activities.count > 1 ? activities[1] : activities[0]).compactGlyph
     }
 }
 

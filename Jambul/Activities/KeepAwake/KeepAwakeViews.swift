@@ -75,6 +75,7 @@ extension KeepAwakeActivity {
         HomeCardContent(Text("Keep Awake")) {
             Image(systemName: tabSymbol)
                 .foregroundStyle(isOn ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
+                .islandGlyph(compactGlyph)
         } value: {
             if isOn, let since {
                 KeepAwakeSince(since: since, isShort: true)

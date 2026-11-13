@@ -2,12 +2,20 @@ import SwiftUI
 
 struct IslandView: View {
     let model: IslandModel
+    @Namespace private var glyphs
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Whether the glyph that left its slot beside the notch has reached its place in the open island.
+    @State private var glyphLanded = false
 
     var body: some View {
         let presentation = model.presentation
         let notch = model.notch
         let layout = model.layout
         let shape = IslandShape(topRadius: layout.topRadius, bottomRadius: layout.bottomRadius)
+        let compact = model.compactActivities
+        let showsCompact = !compact.isEmpty && (presentation == .compact || presentation == .lifted)
+        // The glyph left of the notch, if it has a place in the open island to travel to.
+        let glyph = compact.isEmpty || reduceMotion ? nil : CompactContent.leadingGlyph(of: compact)
 
         ZStack(alignment: .top) {
             // No shadow: its window is only a little larger than the open island and cut the shadow off in a line.
@@ -15,9 +23,7 @@ struct IslandView: View {
 
             // Clipped, so content never draws outside the island while it morphs.
             ZStack(alignment: .top) {
-                let compact = model.compactActivities
-                if !compact.isEmpty, let slotWidth = model.compactSlotWidth, let leadingWidth = model.compactLeadingWidth,
-                   presentation == .compact || presentation == .lifted {
+                if showsCompact, let slotWidth = model.compactSlotWidth, let leadingWidth = model.compactLeadingWidth {
                     // Each slot changes on its own (`CompactContent`), so a countdown that stays holds still.
                     CompactContent(activities: compact, notch: notch, leadingWidth: leadingWidth, slotWidth: slotWidth)
                         .transition(Motion.contentTransition)
@@ -37,9 +43,37 @@ struct IslandView: View {
                         .transition(Motion.contentTransition)
                 }
             }
+            .environment(\.islandGlyphInFlight, presentation == .expanded && !glyphLanded ? glyph : nil)
+            .overlayPreferenceValue(IslandGlyphsShown.self, alignment: .top) { shown in
+                // The glyph left of the notch, over the content: laid out in its slot as `CompactContent` would, and in
+                // the open island moved to its own place if it has one, where it gives way once it lands to the glyph
+                // that belongs there.
+                let place = presentation == .expanded ? glyph.flatMap { shown[$0] } : nil
+                if !compact.isEmpty, showsCompact || place != nil, let slotWidth = model.compactSlotWidth,
+                   let leadingWidth = model.compactLeadingWidth {
+                    // Landed, it is hidden but stays as it is, ticking or blinking unseen while the island is open:
+                    // told that nobody can see it, a glyph like the timer's ring trades one view for another, and the
+                    // new one would start its way back from the slot rather than fly there.
+                    let isShown = showsCompact || !glyphLanded
+                    let inset = IslandLayout.compactInset(notch)
+                    HStack(spacing: 0) {
+                        IslandGlyphFlyer(glyph: CompactContent.leading(of: compact), place: place, glyphs: glyphs)
+                            .frame(width: leadingWidth, height: IslandLayout.compactGlyphHeight)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, inset)
+                    .frame(width: notch.size.width + leadingWidth + slotWidth + 2 * inset, height: notch.compactHeight)
+                    // On its own short fade either way, so it is there as soon as it sets off back.
+                    .animation(Motion.glyphLanding) { $0.opacity(isShown ? 1 : 0) }
+                    .foregroundStyle(.white)
+                    .id(CompactContent.leadingID(of: compact))
+                    .transition(Motion.contentTransition)
+                }
+            }
             .frame(width: layout.size.width, height: layout.size.height, alignment: .top)
             .clipShape(shape)
             .environment(\.islandIsVisible, model.isVisible)
+            .environment(\.islandGlyphs, glyphs)
         }
         .frame(width: layout.size.width, height: layout.size.height)
         .contentShape(shape)
@@ -48,7 +82,22 @@ struct IslandView: View {
         .offset(x: layout.xOffset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
+        .task(id: FlightPhase(presentation: presentation, showsCompact: showsCompact)) {
+            // Open, the glyph has landed once its flight is over; back beside the notch, it is ready to fly again.
+            if presentation == .expanded {
+                try? await Task.sleep(for: Motion.glyphFlight)
+                if !Task.isCancelled { withAnimation(Motion.glyphLanding) { glyphLanded = true } }
+            } else if showsCompact {
+                glyphLanded = false
+            }
+        }
     }
+}
+
+/// What decides whether the glyph left of the notch has landed: where the island is, and whether it has such a glyph.
+private struct FlightPhase: Equatable {
+    let presentation: IslandPresentation
+    let showsCompact: Bool
 }
 
 #if DEBUG
