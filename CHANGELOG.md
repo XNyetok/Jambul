@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Changed
+- Claude Code's Done and Stopped peeks show a check that draws itself and an exclamation mark instead of an eye.
+
 ## [0.4.0] - 2026-11-14
 A livelier island: the glyph beside the notch travels into the open island, activities take turns there, and Jambul now needs macOS 27.
 

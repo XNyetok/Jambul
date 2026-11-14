@@ -188,21 +188,19 @@ enum Motion {
         static let workingStepAngle: Double = 36
     }
 
-    /// Claude Code's sessions: the eye on a peek saying how a turn ended, once, after the peek has come out, and a
-    /// working session's ring in the open island.
+    /// Claude Code's sessions: a finished turn's check, a failed turn's peek shaking its head, and a working session's
+    /// ring in the open island.
     enum Agent {
-        static let feel: Animation = .spring(duration: 0.6, bounce: 0.35).delay(0.35)
-        /// The eye shaking its head once the peek has come out, as a turn fails, and drooping only after that.
+        /// The check's circle pops in, past its size and back, as the peek comes out of its blur; the check then draws
+        /// itself across it.
+        static let checkPop: Animation = .spring(duration: 0.4, bounce: 0.45).delay(0.2)
+        static let checkDraw: Animation = .easeOut(duration: 0.3).delay(0.35)
+        /// The shake waits for the peek to come out, rather than playing while it is still blurred.
         static let shakeAfter: Duration = .milliseconds(350)
         static let shake: Animation = .spring(duration: 0.12, bounce: 0.2)
-        static let shakeOffsets: [CGFloat] = [0, -5, 5, -3, 3, 0]
-        static let droop: Animation = .spring(duration: 0.6, bounce: 0.35).delay(1.0)
+        static let shakeOffsets: [Double] = [0, -5, 5, -3, 3, 0]
         /// The ring of a working session turning an eighth on each beat (`Usage.untilNextBeat`), and only while the
         /// open island shows it. Nothing moves in between.
         static let workingStepAngle: Double = 45
-        /// A sad eye: half closed, tilted and a little lower.
-        static let sadOpenness: CGFloat = 0.45
-        static let sadTilt: Double = -12
-        static let sadDrop: CGFloat = 2
     }
 }

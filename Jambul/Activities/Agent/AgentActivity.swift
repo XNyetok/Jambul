@@ -332,12 +332,12 @@ final class AgentActivity: IslandActivity {
             activities?.peek(Peek(symbol: "checkmark.circle.fill", tint: tint,
                                   title: String(localized: "Done · \(session.project)"),
                                   detail: took.map(Self.duration), subtitle: session.reply ?? session.workSummary,
-                                  duration: .seconds(4), source: id, topic: session.id, motion: .happy))
+                                  duration: .seconds(4), source: id, topic: session.id, motion: .draw))
         case .failed:
             activities?.peek(Peek(symbol: "exclamationmark.circle.fill", tint: .red,
                                   title: String(localized: "Stopped · \(session.project)"), subtitle: session.reply,
                                   duration: .seconds(4), mustBeSeen: true, source: id, topic: session.id,
-                                  motion: .sad))
+                                  motion: .shake))
         default:
             break
         }
