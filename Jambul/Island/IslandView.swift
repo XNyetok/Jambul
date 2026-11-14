@@ -52,8 +52,8 @@ struct IslandView: View {
                 if !compact.isEmpty, showsCompact || place != nil, let slotWidth = model.compactSlotWidth,
                    let leadingWidth = model.compactLeadingWidth {
                     // Landed, it is hidden but stays as it is, ticking or blinking unseen while the island is open:
-                    // told that nobody can see it, a glyph like the timer's ring trades one view for another, and the
-                    // new one would start its way back from the slot rather than fly there.
+                    // told that nobody can see it, a glyph could trade one view for another, and the new one would
+                    // start its way back from the slot rather than fly there.
                     let isShown = showsCompact || !glyphLanded
                     let inset = IslandLayout.compactInset(notch)
                     HStack(spacing: 0) {

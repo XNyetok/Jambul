@@ -46,9 +46,8 @@ protocol IslandActivity: AnyObject, Observable {
     @ViewBuilder var compactTrailing: CompactTrailing { get }
     /// A single glyph on the left of the notch, for when a more important activity takes the right.
     var compactMinimal: AnyView { get }
-    /// Its tab in the open island, in the room below the notch: mostly one row, as tall as the timer's ring, with its
-    /// glyph on the left, what it is in the
-    /// middle and its buttons on the right.
+    /// Its tab in the open island, in the room below the notch: mostly one row, with its glyph on the left, what it is
+    /// in the middle and its buttons on the right.
     @ViewBuilder var tab: Tab { get }
     /// Its card on Home: what it is doing now, at a glance, laid out with `HomeCardContent`.
     @ViewBuilder var homeCard: HomeCard { get }

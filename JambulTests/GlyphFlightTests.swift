@@ -130,7 +130,7 @@ final class GlyphFlightTests {
         return Set((found.ids ?? [:]).keys)
     }
 
-    @Test func theTimersRingHasAPlaceOnItsTabAndOnHome() async throws {
+    @Test func theTimersDialHasAPlaceOnItsTabAndOnHome() async throws {
         let timer = registerWithAPausedTimer()
         defer { timer.stop() }
         let glyph = try #require(timer.compactGlyph)
@@ -208,7 +208,7 @@ final class GlyphFlightTests {
         model.clicked()
         #expect(model.presentation == .compact)
         try await waitUntilDrawnAlike(closed, neverOpened)
-        // And something is drawn there at all: the ring, in the timer's color.
+        // And something is drawn there at all: the dial, in the timer's color.
         #expect(try drawsSomething(pixels(of: closed)))
     }
 

@@ -10,7 +10,7 @@ struct IslandLayout {
     static let notchCornerRadius: CGFloat = 10
     /// Flares at the top of the compact island, which take this much off each side of its frame.
     static let compactTopRadius: CGFloat = 6
-    /// Height of the glyphs beside the notch, such as the timer's ring and digits.
+    /// Height of the glyphs beside the notch, such as the timer's dial and digits.
     static let compactGlyphHeight: CGFloat = 16
 
     /// Space from the drawn edge of the compact island to its content: the same as above and below the glyphs in the
@@ -45,10 +45,12 @@ struct IslandLayout {
         ((count + 1) / 2, count / 2)
     }
 
-    /// The glyph on the left of a one-row tab, like the timer's ring: large enough to fill the room below the notch,
-    /// which a 44 pt glyph left half empty.
-    static let tabGlyphHeight: CGFloat = 56
-    static let tabRingWidth: CGFloat = 6
+    /// The timer's dial on its tab: as tall as the room below the notch allows, with an even margin above and below.
+    static let tabDialSize: CGFloat = 84
+    /// The timer's countdown on its tab, and a smaller one from an hour up: "9:59:59" is 178 pt wide in the larger,
+    /// more than the 160 pt beside the dial and the controls (measured).
+    static let tabCountdownFont = Font.system(size: 44, weight: .semibold, design: .rounded)
+    static let tabLongCountdownFont = Font.system(size: 36, weight: .semibold, design: .rounded)
     /// A one-row tab's name and the line under it.
     static let tabTitleFont = Font.system(size: 15, weight: .semibold)
     static let tabDetailFont = Font.system(size: 12, weight: .medium)

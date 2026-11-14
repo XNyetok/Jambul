@@ -98,6 +98,8 @@ private struct PeekIcon: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var arrived = false
     @State private var beat = 0
+    /// How often the bell has rung, for `ring`: once, as the peek comes out.
+    @State private var rings = 0
 
     var body: some View {
         icon
@@ -124,6 +126,11 @@ private struct PeekIcon: View {
                 try? await Task.sleep(for: Motion.Agent.shakeAfter, tolerance: Motion.timerTolerance)
                 if !Task.isCancelled { beat += 1 }
             }
+            .task {
+                guard peek.motion == .ring, !reduceMotion else { return }
+                try? await Task.sleep(for: Motion.timerRingAfter, tolerance: Motion.timerTolerance)
+                if !Task.isCancelled { rings += 1 }
+            }
     }
 
     @ViewBuilder private var icon: some View {
@@ -141,6 +148,7 @@ private struct PeekIcon: View {
             Image(systemName: peek.symbol)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(peek.tint)
+                .symbolEffect(.wiggle, options: .nonRepeating, value: rings)
         }
     }
 
