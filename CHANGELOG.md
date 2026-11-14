@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-14
+Keep Awake gets a pair of eyes, the timer a kitchen-timer dial, and the island's buttons a flat, smaller look.
+
 ### Changed
 - Claude Code's Done and Stopped peeks show a check that draws itself and an exclamation mark instead of an eye.
 - Keep Awake has a pair of eyes that open, blink and fall asleep, a face on its tab that turns it on or off, and how long it has been on beside the notch.
@@ -70,7 +73,8 @@ The first public release.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
 
-[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/XNyetok/Jambul/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/XNyetok/Jambul/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/XNyetok/Jambul/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/XNyetok/Jambul/compare/v0.2.0...v0.2.1
