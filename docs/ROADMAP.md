@@ -20,16 +20,17 @@ Where Jambul is and where it's heading. Plans change as we learn; open an issue 
 - **Timer:** 5, 15 or 25 minutes, with a ring and the time left beside the notch. It can get +1 minute, be paused or be stopped. When it ends there's a peek, a sound and a haptic tap, even if the screen was locked or the Mac asleep.
 - **Battery:** peeks when the charger is plugged in or out and when the battery is full, plus low-battery warnings at 20% and 5% that wait until someone can see them.
 - **Keep Awake:** keeps the display on until it's turned off, for long downloads, builds or agents, with an eye and a typing laptop beside the notch. It turns itself off at 20% battery.
-- **Several activities at once:** the two most important share the compact island.
-- **Tabs:** the open island shows one feature per tab, with one color per feature.
+- **Several activities at once:** the most important keeps the right of the compact island, and the others take turns on its left.
+- **Tabs:** the open island shows one feature per tab, split between the two sides of the camera, with one color per feature. In full screen the day and time show below the camera.
 - **Home:** the first tab, with a card for each feature, where the island opens as Jambul starts. After that it opens on the tab you looked at last.
 - **Usage limits:** Claude, Antigravity and Codex limits in a tab with each service's logo, peeks at 80% and 95%, and the island beside the notch from 95% until a limit resets. Jambul itself still makes no network connections: it reads Claude Code's status line, Antigravity's own usage report and Codex's session logs.
+- **Claude Code sessions:** which sessions work, need you or are done, beside the notch and in their own tab. A peek tells you when one needs your permission or an answer, finishes or stops on an error, and Keep Awake can stay on until they finish.
+- **Motion:** as the island opens, the glyph beside the notch travels to its place in it, and back as it closes. Numbers roll as they change.
 - **Open source:** a public repository with documentation and contribution guides. Every pull request is built, unit-tested and scanned for secrets and personal data. A workflow builds each release and publishes it on GitHub, starting with 0.1.0.
 
 ## Next
 The next feature comes from this list:
 - **Prayer times and imsakiyah:** reuses the timer, with the city chosen by hand, so no permissions or private APIs are needed.
-- **Know when a coding agent is done:** a peek when an agent finishes (through Claude Code hooks), and Keep Awake turning itself off.
 - Calendar, AirPods and Bluetooth devices, and a file shelf with AirDrop.
 
 ## Later
