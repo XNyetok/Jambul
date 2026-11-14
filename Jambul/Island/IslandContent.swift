@@ -109,21 +109,27 @@ private struct PeekIcon: View {
             .phaseAnimator(phases, trigger: beat) { content, phase in
                 content
                     .scaleEffect(peek.motion == .pulse ? phase : 1)
-                    .offset(y: peek.motion == .bounce ? phase : 0)
-            } animation: { _ in Motion.Usage.beat }
+                    .offset(x: peek.motion == .shake ? phase : 0, y: peek.motion == .bounce ? phase : 0)
+            } animation: { _ in peek.motion == .shake ? Motion.Agent.shake : Motion.Usage.beat }
             .background {
                 if peek.motion == .bounce, !reduceMotion { PeekSparks(color: peek.tint) }
             }
             .onAppear {
                 guard !reduceMotion else { return }
                 withAnimation(peek.motion == .sleep ? Motion.Usage.fallAsleep : Motion.Usage.turn) { arrived = true }
-                beat += 1
+                if peek.motion != .shake { beat += 1 }
+            }
+            .task {
+                guard peek.motion == .shake, !reduceMotion else { return }
+                try? await Task.sleep(for: Motion.Agent.shakeAfter, tolerance: Motion.timerTolerance)
+                if !Task.isCancelled { beat += 1 }
             }
     }
 
     @ViewBuilder private var icon: some View {
-        if peek.motion == .happy || peek.motion == .sad {
-            PeekEye(isHappy: peek.motion == .happy, tint: peek.tint)
+        if peek.motion == .draw {
+            let shown = arrived || reduceMotion
+            PeekCheck(tint: peek.tint, scale: shown ? 1 : 0, drawn: shown ? 1 : 0)
         } else if let logo = peek.logo {
             Image(logo)
                 .resizable()
@@ -152,64 +158,66 @@ private struct PeekIcon: View {
         }
     }
 
+    /// Scales for a pulse, offsets for a bounce or a shake; with Reduce Motion, only the resting value.
     private var phases: [Double] {
-        guard !reduceMotion else { return [peek.motion == .bounce ? 0 : 1] }
         switch peek.motion {
-        case .pulse: return Motion.Usage.pulseScales
-        case .bounce: return Motion.Usage.bounceOffsets
-        default: return [1]
+        case .pulse: reduceMotion ? [1] : Motion.Usage.pulseScales
+        case .bounce: reduceMotion ? [0] : Motion.Usage.bounceOffsets
+        case .shake: reduceMotion ? [0] : Motion.Agent.shakeOffsets
+        default: [1]
         }
     }
 }
 
-/// Keep Awake's eye on a peek, saying how something ended: it closes into a smile, or half closes and droops. Once, as
-/// the peek comes out, and then it holds still.
-private struct PeekEye: View {
-    let isHappy: Bool
+/// `checkmark.circle.fill` drawn rather than shown, so it can pop in and draw its check: the circle at `scale` of its
+/// size, and the check drawn along `drawn` of its stroke, each animating as it changes. Laid out as the symbol, which it
+/// matches once both are 1, so the title sits where it does on other peeks.
+struct PeekCheck: View {
     let tint: Color
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var felt = false
-    @State private var shakes = 0
+    let scale: CGFloat
+    let drawn: CGFloat
+    /// The circle's diameter as a part of the symbol's width, and the check's stroke as a part of the circle's
+    /// (measured on the symbol).
+    private static let circle: CGFloat = 0.85
+    private static let stroke: CGFloat = 0.094
 
     var body: some View {
-        ZStack {
-            Image(systemName: "eye.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(tint)
-                .scaleEffect(x: 1, y: felt ? (isHappy ? Motion.eyeShut : Motion.Agent.sadOpenness) : 1)
-                .opacity(felt && isHappy ? 0 : 1)
-            if isHappy {
-                // The closed eye of a smile, curving up.
-                PeekSmile()
-                    .trim(from: 0, to: felt ? 1 : 0)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
-                    .frame(width: 16, height: 7)
+        Image(systemName: "checkmark.circle.fill")
+            .font(.system(size: 17, weight: .semibold))
+            .hidden()
+            .overlay {
+                GeometryReader { proxy in
+                    let diameter = proxy.size.width * Self.circle
+                    ZStack {
+                        Circle().fill(tint)
+                        CheckStroke()
+                            .trim(from: 0, to: drawn)
+                            .stroke(style: StrokeStyle(lineWidth: diameter * Self.stroke, lineCap: .round,
+                                                       lineJoin: .round))
+                            .blendMode(.destinationOut)
+                            .animation(Motion.Agent.checkDraw, value: drawn)
+                    }
+                    .frame(width: diameter, height: diameter)
+                    .compositingGroup()
+                    .scaleEffect(scale)
+                    .animation(Motion.Agent.checkPop, value: scale)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                }
             }
-        }
-        .rotationEffect(.degrees(felt && !isHappy ? Motion.Agent.sadTilt : 0))
-        .offset(y: felt && !isHappy ? Motion.Agent.sadDrop : 0)
-        .frame(width: 22, height: 18)
-        .phaseAnimator(isHappy || reduceMotion ? [0] : Motion.Agent.shakeOffsets, trigger: shakes) { content, x in
-            content.offset(x: x)
-        } animation: { _ in Motion.Agent.shake }
-        .onAppear {
-            guard !reduceMotion else { return felt = true }
-            withAnimation(isHappy ? Motion.Agent.feel : Motion.Agent.droop) { felt = true }
-        }
-        .task {
-            guard !isHappy, !reduceMotion else { return }
-            try? await Task.sleep(for: Motion.Agent.shakeAfter)
-            if !Task.isCancelled { shakes += 1 }
-        }
     }
 }
 
-/// An arc curving up across its frame, like a closed, smiling eye.
-private struct PeekSmile: Shape {
+/// The check of `checkmark.circle.fill` as one stroke, from its short end down to its corner and up to its long end, so
+/// it draws in that order. Measured on the symbol, as parts of its circle.
+private struct CheckStroke: Shape {
     func path(in rect: CGRect) -> Path {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        }
         var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY), control: CGPoint(x: rect.midX, y: rect.minY - rect.height))
+        path.move(to: point(0.315, 0.536))
+        path.addLine(to: point(0.4475, 0.699))
+        path.addLine(to: point(0.681, 0.331))
         return path
     }
 }

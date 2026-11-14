@@ -154,7 +154,9 @@ struct AgentActivityTests {
         #expect(peek.title == "Done · Jambul")
         #expect(peek.detail == "1m 28s")
         #expect(peek.subtitle == "Tests pass")
-        #expect(peek.motion == .happy)
+        // A check, as in the session's circle, popping in and drawing itself.
+        #expect(peek.symbol == "checkmark.circle.fill")
+        #expect(peek.motion == .draw)
         #expect(!peek.mustBeSeen)
     }
 
@@ -185,7 +187,7 @@ struct AgentActivityTests {
         #expect(inbox.peeks.map(\.title) == ["Needs you · Other", "Done · Jambul"])
     }
 
-    @Test func aFailedTurnPeeksSadly() throws {
+    @Test func aFailedTurnPeeksAndShakesItsHead() throws {
         let agent = makeAgent()
         agent.receive(event(.prompt))
         var failure = event(.stopFailure)
@@ -195,7 +197,8 @@ struct AgentActivityTests {
         let peek = try #require(inbox.peeks.last)
         #expect(peek.title == "Stopped · Jambul")
         #expect(peek.subtitle == "rate_limit")
-        #expect(peek.motion == .sad)
+        #expect(peek.symbol == "exclamationmark.circle.fill")
+        #expect(peek.motion == .shake)
         #expect(peek.mustBeSeen)
     }
 

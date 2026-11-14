@@ -38,9 +38,9 @@ extension Peek {
     }
 }
 
-/// A peek's symbol moving once as it comes out. Each says something: turning to draw the eye, beating for urgency,
-/// dimming as something runs out, and jumping as it comes back. `happy` and `sad` take Keep Awake's eye in place of the
-/// symbol: it closes into a smile, or droops.
+/// A peek's symbol moving once as it comes out. Each says something: turning to catch the eye, beating for urgency,
+/// dimming as something runs out, jumping as it comes back, popping in and drawing its check as something is done, and
+/// shaking its head as something fails. `draw` is for `checkmark.circle.fill`, which it draws itself.
 enum PeekMotion: Equatable {
-    case none, spin, pulse, sleep, bounce, happy, sad
+    case none, spin, pulse, sleep, bounce, draw, shake
 }
