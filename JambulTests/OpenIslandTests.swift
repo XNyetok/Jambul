@@ -204,8 +204,8 @@ final class OpenIslandTests {
         let panel = try await openPanel(on: model)
         defer { panel.orderOut(nil) }
 
-        // The timer's card, the third of four or the second of two.
-        let card = everyCard ? cardPoint(2, of: 4) : cardPoint(1, of: 2)
+        // The timer's card, the third of four or the second of two, low on it, where a quick start takes its place.
+        let card = CGPoint(x: islandLeft + IslandLayout.expandedContentInset + (everyCard ? 237 : 277), y: quickStartRow)
         click(panel, at: card, count: 1)
         try await Task.sleep(for: .milliseconds(120))
         #expect(model.selectedTab == timer.id)
@@ -273,6 +273,11 @@ final class OpenIslandTests {
         let canvas = IslandLayout.canvasSize(notch)
         let right = (canvas.width + IslandLayout.expandedSize.width) / 2 - IslandLayout.expandedContentInset
         return CGPoint(x: right - IslandButtonStyle.height / 2, y: contentMiddle)
+    }
+
+    /// The middle of the row of the timer's quick starts, 72 pt down the 100 pt room below the notch (from their layout).
+    private var quickStartRow: CGFloat {
+        IslandLayout.canvasSize(notch).height - (notch.size.height + IslandLayout.expandedContentTopGap + 72)
     }
 
     /// The height, in the panel, halfway down the room below the notch, where a tab's row is centered.

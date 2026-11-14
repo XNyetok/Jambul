@@ -13,7 +13,7 @@ final class TimerActivity: NSObject, IslandActivity {
     enum State: Equatable {
         case idle
         /// Counting down to the interval's end. The interval spans the whole countdown, added minutes included, so it
-        /// is also what the ring measures against.
+        /// is also what `fraction(at:)` measures against.
         case running(ClosedRange<Date>)
         /// Stopped at `at`, keeping the interval it ran with.
         case paused(ClosedRange<Date>, at: Date)
@@ -45,8 +45,8 @@ final class TimerActivity: NSObject, IslandActivity {
         }
     }
 
-    /// The quick starts on its tab.
-    static let presets: [Duration] = [.seconds(5 * 60), .seconds(15 * 60), .seconds(25 * 60)]
+    /// The quick starts on its tab, round buttons as on Apple Watch.
+    static let presets: [Duration] = [1, 5, 10, 15, 25, 45, 60].map { .seconds($0 * 60) }
     static let addedTime: Duration = .seconds(60)
     /// Twice as long as other peeks, since the owner may be looking elsewhere when the time is up.
     static let donePeekDuration: Duration = .seconds(5)
@@ -67,7 +67,7 @@ final class TimerActivity: NSObject, IslandActivity {
     }
 
     /// What the views draw: the countdown, or once it has stopped or finished, the countdown as it last was. The view
-    /// leaving the island after Stop then fades out on the time it showed, not on 0:00 and an empty ring.
+    /// leaving the island after Cancel then fades out on the time it showed, not on 0:00.
     private(set) var shown = State.idle
 
     var isRunning: Bool {
@@ -81,9 +81,13 @@ final class TimerActivity: NSObject, IslandActivity {
 
     /// Room for the countdown beside the notch: "25:00" is 39 pt wide there, and "1:00:00" 51 pt (measured).
     var compactSlotWidth: CGFloat { shown.total >= 3600 ? 54 : 42 }
-    /// The ring.
+    /// The dial.
     var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight }
-    var compactGlyph: String? { "timer.ring" }
+    var compactGlyph: String? { "timer.dial" }
+
+    /// The length the last countdown started with, marked among the quick starts so starting it again is one click.
+    /// Only for as long as Jambul runs.
+    private(set) var lastLength: Duration?
 
     /// Weak, since the center holds its activities.
     @ObservationIgnored private weak var activities: ActivityCenter?
@@ -130,6 +134,7 @@ final class TimerActivity: NSObject, IslandActivity {
         // A countdown that ends before it starts can't even be stored.
         guard duration > .zero else { return }
         let start = now()
+        lastLength = duration
         state = .running(start...start.addingTimeInterval(duration / .seconds(1)))
         Logger.activities.notice("timer started for \(duration.description, privacy: .public)")
         scheduleWakeUp()
@@ -157,7 +162,7 @@ final class TimerActivity: NSObject, IslandActivity {
         scheduleWakeUp()
     }
 
-    /// Adds a minute to both the time left and the whole countdown, so the ring grows back a little.
+    /// Adds a minute to both the time left and the whole countdown, so the dial's slice grows back a little.
     func addMinute() {
         let added = Self.addedTime / .seconds(1)
         switch state {
@@ -194,6 +199,7 @@ final class TimerActivity: NSObject, IslandActivity {
     }
 
     private func finish(endingAt end: Date) {
+        let length = state.total
         // The state and the peek change in the same turn, so the island goes straight from the countdown to the peek.
         state = .idle
         wakeUp?.cancel()
@@ -201,7 +207,8 @@ final class TimerActivity: NSObject, IslandActivity {
         Logger.activities.notice("timer done, \(lateness, privacy: .public) ms after its end")
         // The sound plays now; the peek waits for the owner if nobody can see the island.
         activities?.peek(Peek(symbol: "bell.fill", tint: .orange, title: String(localized: "Timer done"),
-                              duration: Self.donePeekDuration, mustBeSeen: true, source: id))
+                              detail: Self.lengthText(length), duration: Self.donePeekDuration, mustBeSeen: true,
+                              source: id, motion: .ring))
         onFinish()
     }
 

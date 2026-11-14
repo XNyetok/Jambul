@@ -17,7 +17,7 @@ Where Jambul is and where it's heading. Plans change as we learn; open an issue 
 
 ## Done
 - **The island:** a living island around the notch, which opens on hover and click, with haptics and Reduce Motion support. It works next to full-screen apps without covering them, and on screens without a notch.
-- **Timer:** 5, 15 or 25 minutes, with a ring and the time left beside the notch. It can get +1 minute, be paused or be stopped. When it ends there's a peek, a sound and a haptic tap, even if the screen was locked or the Mac asleep.
+- **Timer:** 1 to 60 minutes from round quick starts, on a dial whose orange slice shrinks like a kitchen timer's, with the time left beside the notch. It can get +1 minute, be paused or be cancelled. When it ends there's a peek, a sound and a haptic tap, even if the screen was locked or the Mac asleep.
 - **Battery:** peeks when the charger is plugged in or out and when the battery is full, plus low-battery warnings at 20% and 5% that wait until someone can see them.
 - **Keep Awake:** keeps the display on until it's turned off, for long downloads, builds or agents. A pair of eyes opens, blinks and falls asleep with it, and how long it has been on shows beside the notch. It turns itself off at 20% battery.
 - **Several activities at once:** the most important keeps the right of the compact island, and the others take turns on its left.
@@ -29,9 +29,7 @@ Where Jambul is and where it's heading. Plans change as we learn; open an issue 
 - **Open source:** a public repository with documentation and contribution guides. Every pull request is built, unit-tested and scanned for secrets and personal data. A workflow builds each release and publishes it on GitHub, starting with 0.1.0.
 
 ## Next
-- **A new Timer:** a dial whose orange slice shrinks like a kitchen timer's, started from round buttons that show the slice and the end time before a click.
-
-The next feature after it comes from this list:
+The next feature comes from this list:
 - **Prayer times and imsakiyah:** reuses the timer, with the city chosen by hand, so no permissions or private APIs are needed.
 - Calendar, AirPods and Bluetooth devices, and a file shelf with AirDrop.
 

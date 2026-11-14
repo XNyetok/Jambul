@@ -46,6 +46,8 @@ enum PeekMotion: Equatable {
     /// Keep Awake's eyes in place of the symbol, falling asleep as the peek comes out: with a smile first, for work that
     /// is done, or with heavy lids, for a battery running low.
     case smilingEyes, tiredEyes
+    /// A bell ringing once, as time runs out.
+    case ring
 
     /// How the eyes close, for a motion that draws Keep Awake's eyes.
     var eyesClosing: EyesClosing? {

@@ -48,7 +48,7 @@ struct TimerActivityTests {
         timer.pause()
         clock.advance(by: 100)
         timer.resume()
-        // The whole interval moves by the pause, so the ring picks up where it stopped too.
+        // The whole interval moves by the pause, so the dial picks up where it stopped too.
         #expect(timer.state == .running(start.addingTimeInterval(100)...start.addingTimeInterval(400)))
         #expect(timer.remaining(at: clock.now) == 240)
     }
@@ -139,6 +139,8 @@ struct TimerActivityTests {
         #expect(log.chimes == 1)
         #expect(log.peeks.map(\.title) == ["Timer done"])
         #expect(log.peeks.first?.duration == TimerActivity.donePeekDuration)
+        // Its bell rings once.
+        #expect(log.peeks.first?.motion == .ring)
         // The owner asked to be told, so it waits for them if nobody can see the island.
         #expect(log.peeks.first?.mustBeSeen == true)
     }
@@ -274,15 +276,61 @@ struct TimerActivityTests {
         let notch = NotchMetrics(size: CGSize(width: 179, height: 32), compactHeight: 33)
         let room = CGSize(width: IslandLayout.expandedSize.width - 2 * IslandLayout.expandedContentInset,
                           height: IslandLayout.expandedContentRoom(notch))
-        // Idle with its quick starts, then counting down from the widest time with its controls.
-        for counting in [false, true] {
-            if counting {
-                timer.start(.seconds(9 * 3_600 + 59 * 60 + 59))
+        // Idle with its quick starts, then counting down from the widest times with its controls: just under an hour,
+        // an hour on the dot, and under ten.
+        for seconds in [0, 59 * 60 + 59, 3_600, 9 * 3_600 + 59 * 60 + 59] {
+            if seconds > 0 {
+                timer.start(.seconds(seconds))
                 timer.pause()
             }
             let size = NSHostingView(rootView: timer.tab).fittingSize
             #expect(size.width <= room.width && size.height <= room.height, "\(size) in \(room)")
         }
+    }
+
+    @Test func itsPeekSaysHowLongTheCountdownWas() {
+        let timer = makeTimer()
+        timer.start(.seconds(300))
+        timer.addMinute()
+        clock.advance(by: 361)
+        timer.checkTime()
+        #expect(log.peeks.map(\.title) == ["Timer done"])
+        #expect(log.peeks.first?.detail == TimerActivity.lengthText(360))
+    }
+
+    @Test func theDialShowsTheMinutesLeftOfAnHour() {
+        #expect(TimerActivity.dialFraction(25 * 60) == 25.0 / 60)
+        #expect(TimerActivity.dialFraction(5 * 60) == 5.0 / 60)
+        #expect(TimerActivity.dialFraction(0) == 0)
+        // An hour or more fills it, and nothing is left past the end.
+        #expect(TimerActivity.dialFraction(60 * 60) == 1)
+        #expect(TimerActivity.dialFraction(90 * 60) == 1)
+        #expect(TimerActivity.dialFraction(-5) == 0)
+    }
+
+    @Test func theLengthLastStartedIsMarked() {
+        let timer = makeTimer()
+        #expect(timer.lastLength == nil)
+        timer.start(.seconds(15 * 60))
+        timer.stop()
+        // Stopped, it is still the one to start again.
+        #expect(timer.lastLength == .seconds(15 * 60))
+        timer.start(.seconds(5 * 60))
+        #expect(timer.lastLength == .seconds(5 * 60))
+        timer.stop()
+    }
+
+    @Test func lengthsReadShortlyAndInWords() {
+        let english = Locale(identifier: "en_US")
+        #expect(TimerActivity.lengthText(25 * 60, locale: english) == "25 min")
+        #expect(TimerActivity.lengthText(10, locale: english) == "10 sec")
+        #expect(TimerActivity.lengthTitle(.seconds(25 * 60), locale: english) == "25 minutes")
+        #expect(TimerActivity.lengthTitle(.seconds(60), locale: english) == "1 minute")
+        #expect(TimerActivity.lengthTitle(.seconds(60 * 60), locale: english) == "1 hour")
+    }
+
+    @Test func itsQuickStartsAreRoundButtonsUpToAnHour() {
+        #expect(TimerActivity.presets.map { Int($0 / .seconds(60)) } == [1, 5, 10, 15, 25, 45, 60])
     }
 
     @Test func itsTabSaysWhenTheCountdownEnds() {
@@ -332,11 +380,20 @@ struct TimerActivityTests {
     }
 
     @Test func aRunningCountdownTicksOnlyWhileSomeoneCanSeeIt() {
+        let timer = makeTimer()
+        #expect(TimerTicks<EmptyView>.ticking(timer, isVisible: true) == nil)
+        timer.start(.seconds(300))
         let interval = clock.now...clock.now.addingTimeInterval(300)
-        #expect(TimerTicks<EmptyView>.ticking(.running(interval), isVisible: true) == interval)
+        #expect(TimerTicks<EmptyView>.ticking(timer, isVisible: true) == interval)
         // Behind the hidden island, a sleeping display or the lock screen, it draws once and holds still.
-        #expect(TimerTicks<EmptyView>.ticking(.running(interval), isVisible: false) == nil)
-        #expect(TimerTicks<EmptyView>.ticking(.paused(interval, at: clock.now), isVisible: true) == nil)
+        #expect(TimerTicks<EmptyView>.ticking(timer, isVisible: false) == nil)
+        timer.pause()
+        #expect(TimerTicks<EmptyView>.ticking(timer, isVisible: true) == nil)
+        timer.resume()
+        // Stopped, it holds still too, though it still shows the countdown as it last was.
+        timer.stop()
+        #expect(timer.shown != .idle)
+        #expect(TimerTicks<EmptyView>.ticking(timer, isVisible: true) == nil)
     }
 
     @Test func ticksLandOnWholeSecondsBeforeTheEnd() {

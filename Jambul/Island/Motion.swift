@@ -142,6 +142,15 @@ enum Motion {
     /// The glyph that flew giving way to the one that belongs there, which can be drawn differently.
     static let glyphLanding: Animation = .easeOut(duration: 0.12)
 
+    /// The timer's dial winding its slice to a length under the pointer, to the time left as a countdown starts or gets
+    /// another minute, and back to empty as it stops. Second by second the slice moves without animation.
+    static var dialWind: Animation {
+        reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.55, bounce: 0.25)
+    }
+
+    /// The bell on "Timer done" waits for the peek to come out of its blur before it rings.
+    static let timerRingAfter: Duration = .milliseconds(300)
+
     /// An activity's tab trading what it shows, like the timer's quick starts for its countdown.
     static var tabStateChange: Animation {
         reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.35, bounce: 0)
