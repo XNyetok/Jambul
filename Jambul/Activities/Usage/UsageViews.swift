@@ -179,7 +179,7 @@ private struct UsageColumn: View {
     private var reading: UsageReading? { activity.readings[provider] }
     private var fullest: UsageWindow? { reading?.fullest(at: now) }
     /// Claude's logo turns a step on each beat while Claude Code works, only while the open island shows it; between
-    /// steps nothing moves, as with Keep Awake's eye.
+    /// steps nothing moves, as with Keep Awake's eyes.
     private var turnsWhileWorking: Bool { provider == .claude && isVisible && !reduceMotion }
 
     var body: some View {
@@ -259,7 +259,7 @@ private struct UsageColumn: View {
     @ViewBuilder private var detail: some View {
         if activity.needsConnecting.contains(provider) {
             Button("Connect") { activity.onConnect?(provider) }
-                .buttonStyle(.island(tint: provider.brandColor))
+                .buttonStyle(.islandProminent(tint: provider.brandColor))
                 .controlSize(.small)
         } else {
             Text(detailText)

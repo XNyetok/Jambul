@@ -43,4 +43,16 @@ extension Peek {
 /// shaking its head as something fails. `draw` is for `checkmark.circle.fill`, which it draws itself.
 enum PeekMotion: Equatable {
     case none, spin, pulse, sleep, bounce, draw, shake
+    /// Keep Awake's eyes in place of the symbol, falling asleep as the peek comes out: with a smile first, for work that
+    /// is done, or with heavy lids, for a battery running low.
+    case smilingEyes, tiredEyes
+
+    /// How the eyes close, for a motion that draws Keep Awake's eyes.
+    var eyesClosing: EyesClosing? {
+        switch self {
+        case .smilingEyes: .smile
+        case .tiredEyes: .tired
+        default: nil
+        }
+    }
 }

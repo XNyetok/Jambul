@@ -165,7 +165,7 @@ struct AgentTab: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
                     Button("Connect") { activity.onConnect?() }
-                        .buttonStyle(.island(tint: activity.tint))
+                        .buttonStyle(.islandProminent(tint: activity.tint))
                 }
             } else if sessions.isEmpty {
                 Text(activity.problem ?? String(localized: "No Claude Code sessions yet"))

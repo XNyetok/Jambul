@@ -138,11 +138,12 @@ final class GlyphFlightTests {
         #expect(try await glyphsShown(by: HomeTab(center: activities)).contains(glyph))
     }
 
-    @Test func keepAwakesEyeHasAPlaceOnHome() async throws {
+    @Test func keepAwakesEyesHaveAPlaceOnItsTabAndOnHome() async throws {
         let keepAwake = KeepAwakeActivity(activities: activities, defaults: defaults, bootSession: nil, holdsScreen: false)
         keepAwake.start()
         defer { keepAwake.stop() }
         let glyph = try #require(keepAwake.compactGlyph)
+        #expect(try await glyphsShown(by: keepAwake.tab).contains(glyph))
         #expect(try await glyphsShown(by: keepAwake.homeCard).contains(glyph))
     }
 

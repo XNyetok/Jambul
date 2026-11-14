@@ -101,7 +101,7 @@ private struct TimerStartTab: View {
                     }
                 }
             }
-            .buttonStyle(.island(tint: timer.tint))
+            .buttonStyle(.islandProminent(tint: timer.tint))
         }
     }
 }
@@ -211,7 +211,7 @@ struct TimerControls: View {
                     .contentTransition(.symbolEffect(.replace))
                     .animation(Motion.valueChange, value: timer.shown.isPaused)
             }
-            .buttonStyle(.islandIcon(tint: timer.tint))
+            .buttonStyle(.islandIcon(tint: timer.tint, prominent: true))
             .accessibilityLabel(timer.shown.isPaused ? Text("Resume") : Text("Pause"))
             Button { timer.stop() } label: {
                 Image(systemName: "stop.fill")
