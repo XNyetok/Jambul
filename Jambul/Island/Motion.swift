@@ -13,7 +13,7 @@ enum Motion {
     static let timerTolerance: Duration = .milliseconds(5)
 
     /// With more than two activities live, how long each of those past the first shows left of the notch before the
-    /// next takes its place. One small change every few seconds, only while they take turns, like the eye's blink.
+    /// next takes its place. One small change every few seconds, only while they take turns, like Keep Awake's blinks.
     static let compactTurn: Duration = .seconds(6)
     /// How late a turn may come, so the system can line it up with other work.
     static let compactTurnTolerance: Duration = .milliseconds(500)
@@ -30,32 +30,43 @@ enum Motion {
     /// A control inside the island sinking under the pointer and springing back.
     static let buttonPress: Animation = .spring(duration: 0.2, bounce: 0)
 
-    /// Keep Awake's eye blinking: shut and open again in this long.
+    /// Keep Awake's eyes blinking: shut and open again in this long.
     static let eyeBlink: TimeInterval = 0.3
-    /// When in a blink the eye is shut: it snaps shut over the first 40% and eases open over the rest.
+    /// When in a blink the eyes are shut: they snap shut over the first 40% and ease open over the rest.
     static let eyeBlinkShutAt: Double = 0.4
-    /// How far the eye squeezes shut: a thin line, as a closed eye reads.
+    /// How far the eyes squeeze in a blink.
     static let eyeShut: CGFloat = 0.1
-    /// The wait between blinks, a little different each time so the eye reads as alive rather than ticking. Nothing
-    /// moves in between, so the eye costs next to nothing (measured: no more WindowServer CPU than with it off); an
-    /// animation that never stops cost WindowServer about 16 CPU points.
+    /// The wait between beats, a little different each time so the eyes read as alive rather than ticking. Nothing
+    /// moves in between, so the eyes cost next to nothing (measured with the single eye before them: no more
+    /// WindowServer CPU than with Keep Awake off); an animation that never stops cost WindowServer about 16 CPU points.
     static let eyeBlinkGap: ClosedRange<TimeInterval> = 8...12
-    /// How late a blink may come. They are a little random anyway, so the system may line them up with other work.
+    /// How late a beat may come. They are a little random anyway, so the system may line them up with other work.
     static let eyeBlinkTolerance: Duration = .milliseconds(500)
-    /// The eye shutting, in a blink and as Keep Awake turns off.
+    /// How many beats are a glance rather than a blink.
+    static let eyeGlanceShare: Double = 0.3
+    /// A glance: aside, a moment's look, and back.
+    static let eyeGlance: TimeInterval = 1.0
+    /// The eyes shutting, in a blink and as Keep Awake turns off.
     static var eyeShutting: CAMediaTimingFunction { CAMediaTimingFunction(name: .easeIn) }
-    /// The eye opening, after a blink and as Keep Awake turns on.
+    /// The eyes opening, after a blink.
     static var eyeOpening: CAMediaTimingFunction { CAMediaTimingFunction(name: .easeOut) }
-    /// The eye opening as Keep Awake turns on.
-    static let eyeOpen: TimeInterval = 0.35
-    /// The eye closing as Keep Awake turns off. Keep Awake leaves the island once it has closed, and the laptop's code
-    /// clears in the same time.
-    static let eyeClose: Duration = .milliseconds(300)
-    /// Keep Awake's laptop typing one line of its code, in a few steps as characters appear. The three lines take about
-    /// 0.56 s on each beat, against the 0.3 s of the eye's blink beside it.
-    static let laptopLineTyping: TimeInterval = 0.16
-    /// From one line starting to the next.
-    static let laptopLineGap: TimeInterval = 0.2
+    /// The eyes popping open as Keep Awake turns on: a spring that stretches them a little past open, then settles in
+    /// about half a second.
+    static let eyePopStiffness: CGFloat = 320
+    static let eyePopDamping: CGFloat = 18
+    /// One eye peeking from its sleep as the pointer rests on the face: half open, and a little faint.
+    static let eyePeek: CGFloat = 0.55
+    static let eyePeekOpacity: Double = 0.8
+    /// How long the eyes take to close as Keep Awake turns off: plainly, or with a smile or heavy lids first. Keep Awake
+    /// leaves the island once they have.
+    static func eyesClosing(_ closing: EyesClosing) -> Duration {
+        switch closing {
+        case .plain: .milliseconds(500)
+        case .smile, .tired: .milliseconds(1_200)
+        }
+    }
+    /// A peek's eyes wait until the peek is out before they close.
+    static let peekEyesWait: Duration = .milliseconds(350)
 
     /// The lift as the pointer arrives. Slow and unbouncy, so it is still moving near top speed when the hover intent
     /// ends and flows straight into opening. A quicker, bouncier lift settled first, and opening then read as a

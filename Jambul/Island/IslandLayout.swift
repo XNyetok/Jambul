@@ -52,6 +52,8 @@ struct IslandLayout {
     /// A one-row tab's name and the line under it.
     static let tabTitleFont = Font.system(size: 15, weight: .semibold)
     static let tabDetailFont = Font.system(size: 12, weight: .medium)
+    /// A large number in the name's place, like how long Keep Awake has been on.
+    static let tabHeadlineFont = Font.system(size: 30, weight: .semibold, design: .rounded)
 
     /// Each tab's button beside the notch, and the highlight behind the chosen one, as wide as it gets
     /// (`tabButtonWidth`).

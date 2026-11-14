@@ -20,9 +20,11 @@ final class KeepAwakeActivityTests {
         activities.onPeek = { [peeks] in peeks.list.append($0) }
     }
 
-    private func makeKeepAwake(bootSession: String = "boot 1", holdsScreen: Bool = false) -> KeepAwakeActivity {
+    private func makeKeepAwake(bootSession: String = "boot 1", holdsScreen: Bool = false,
+                               closingTime: @escaping @MainActor (EyesClosing) -> Duration = { Motion.eyesClosing($0) })
+        -> KeepAwakeActivity {
         KeepAwakeActivity(activities: activities, defaults: defaults, bootSession: bootSession,
-                          now: { [clock] in clock.now }, holdsScreen: holdsScreen)
+                          now: { [clock] in clock.now }, holdsScreen: holdsScreen, closingTime: closingTime)
     }
 
     @Test func turningItOnHoldsTheScreenOnUntilItIsTurnedOff() async throws {
@@ -38,33 +40,63 @@ final class KeepAwakeActivityTests {
         #expect(keepAwake.isOn)
 
         keepAwake.stop()
-        // The screen may sleep at once; the eye closes before it leaves the island.
+        // The screen may sleep at once; the eyes close before it leaves the island.
         #expect(!keepAwake.isKeepingScreenOn)
         #expect(!keepAwake.isOn)
         #expect(keepAwake.isLive)
-        try await Task.sleep(for: Motion.eyeClose + .milliseconds(150))
-        #expect(!keepAwake.isLive)
+        #expect(keepAwake.closing == .plain)
+        try await waitUntil { !keepAwake.isLive }
     }
 
-    @Test func turningItOnAgainWhileTheEyeClosesKeepsItOn() async throws {
+    @Test func turningItOnAgainWhileTheEyesCloseKeepsItOn() async throws {
         let keepAwake = makeKeepAwake()
         keepAwake.start()
         keepAwake.stop()
         keepAwake.start()
-        try await Task.sleep(for: Motion.eyeClose + .milliseconds(150))
+        try await Task.sleep(for: Motion.eyesClosing(.plain) + .milliseconds(150))
         #expect(keepAwake.isOn)
     }
 
     // MARK: Until Claude Code finishes
 
     @Test func onUntilAgentsFinishItTurnsOffAsTheyDo() async throws {
-        let keepAwake = makeKeepAwake()
+        // Its eyes take far longer to close with a smile than plainly here, so a plain closing would show.
+        let keepAwake = makeKeepAwake(closingTime: { $0 == .plain ? .milliseconds(50) : .seconds(60) })
         keepAwake.start(untilAgentsFinish: true)
         #expect(keepAwake.untilAgentsFinish)
         keepAwake.agentsFinished()
         #expect(!keepAwake.isOn)
         #expect(peeks.list.map(\.title) == ["Keep Awake off"])
         #expect(peeks.list.first?.detail == "Claude Code finished")
+        // Its eyes smile before they shut, beside the notch and in the peek alike, and it stays until they have.
+        #expect(peeks.list.first?.motion == .smilingEyes)
+        #expect(keepAwake.closing == .smile)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(keepAwake.isLive)
+        // Nobody clicked, so its tab offers Turn On at once, and a click on its face turns it back on.
+        #expect(keepAwake.isTurningItselfOff)
+        #expect(!keepAwake.offersTurnOff)
+        keepAwake.toggleFromFace()
+        #expect(keepAwake.isOn)
+        #expect(keepAwake.offersTurnOff)
+    }
+
+    @Test func theRestOfADoubleClickOnItsFaceLeavesItOff() async throws {
+        let keepAwake = makeKeepAwake(closingTime: { _ in .milliseconds(100) })
+        keepAwake.toggleFromFace()
+        #expect(keepAwake.isOn)
+        // The first click turns it off; the second, while its eyes close, does nothing, as on Turn Off.
+        keepAwake.toggleFromFace()
+        #expect(!keepAwake.isOn)
+        #expect(keepAwake.offersTurnOff)
+        keepAwake.toggleFromFace()
+        #expect(!keepAwake.isOn)
+        #expect(keepAwake.isLive)
+        // Once it has left the island, a click turns it on again.
+        try await waitUntil { !keepAwake.isLive }
+        #expect(!keepAwake.offersTurnOff)
+        keepAwake.toggleFromFace()
+        #expect(keepAwake.isOn)
     }
 
     @Test func turnedOnPlainlyItStaysOnWhenAgentsFinish() {
@@ -98,10 +130,11 @@ final class KeepAwakeActivityTests {
 
     @Test func itsTabSaysItWaitsForClaudeCode() {
         let since = Date(timeIntervalSinceReferenceDate: 0)
-        #expect(KeepAwakeActivity.sinceLine(since: since, at: since + 30, untilAgentsFinish: true)
-                == "Until Claude Code finishes")
-        #expect(KeepAwakeActivity.sinceLine(since: since, at: since + 12 * 60, untilAgentsFinish: true)
-                == "Until Claude Code finishes · 12m")
+        for seconds in [30, 12 * 60] as [TimeInterval] {
+            #expect(KeepAwakeActivity.detailLine(since: since, at: since + seconds, untilAgentsFinish: true)
+                    == "Until Claude Code finishes")
+        }
+        #expect(KeepAwakeActivity.headline(since: since, at: since + 12 * 60) == "12m")
     }
 
     // MARK: The battery
@@ -114,10 +147,12 @@ final class KeepAwakeActivityTests {
         #expect(keepAwake.isOn)
         keepAwake.update(PowerState(percent: 20, isOnExternalPower: false))
         #expect(!keepAwake.isOn)
-        // Said so in a peek that waits for the owner, who is away.
+        // Said so in a peek that waits for the owner, who is away, with eyes that grow heavy before they shut.
         #expect(peeks.list.map(\.title) == ["Keep Awake off"])
         #expect(peeks.list.first?.mustBeSeen == true)
         #expect(peeks.list.first?.source == keepAwake.id)
+        #expect(peeks.list.first?.motion == .tiredEyes)
+        #expect(keepAwake.closing == .tired)
     }
 
     @Test func turnedOnBelow20PercentItLastsUntil5() {
@@ -192,27 +227,41 @@ final class KeepAwakeActivityTests {
         let english = Locale(identifier: "en_US")
         let since = clock.now
         let time = since.formatted(.dateTime.hour().minute().locale(english))
-        // Never "0m": just turned on, it only says since when.
-        #expect(KeepAwakeActivity.sinceLine(since: since, at: since.addingTimeInterval(59), locale: english)
-                == "On since \(time)")
-        #expect(KeepAwakeActivity.sinceLine(since: since, at: since.addingTimeInterval(60), locale: english)
-                == "On since \(time) · 1m")
-        #expect(KeepAwakeActivity.sinceLine(since: since, at: since.addingTimeInterval(65 * 60), locale: english)
-                == "On since \(time) · 1h 05m")
+        // Never "0m": just turned on, it says it is awake, and since when.
+        #expect(KeepAwakeActivity.headline(since: since, at: since.addingTimeInterval(59)) == "Awake")
+        #expect(KeepAwakeActivity.detailLine(since: since, at: since.addingTimeInterval(59), locale: english)
+                == "Since \(time)")
+        #expect(KeepAwakeActivity.headline(since: since, at: since.addingTimeInterval(60)) == "1m")
+        #expect(KeepAwakeActivity.headline(since: since, at: since.addingTimeInterval(65 * 60)) == "1h 05m")
+        #expect(KeepAwakeActivity.detailLine(since: since, at: since.addingTimeInterval(65 * 60), locale: english)
+                == "Awake since \(time)")
     }
 
-    @Test func theEyeAndTheLaptopRestBesideTheNotchHoweverLongItsBeenOn() {
+    @Test func besideTheNotchItSaysHowLongShortly() {
+        #expect(KeepAwakeActivity.compactOnFor(0) == "On")
+        #expect(KeepAwakeActivity.compactOnFor(59) == "On")
+        #expect(KeepAwakeActivity.compactOnFor(12 * 60 + 59) == "12m")
+        #expect(KeepAwakeActivity.compactOnFor(65 * 60) == "1h05")
+        #expect(KeepAwakeActivity.compactOnFor(9 * 3_600 + 59 * 60) == "9h59")
+        #expect(KeepAwakeActivity.compactOnFor(10 * 3_600 + 30 * 60) == "10h")
+        #expect(KeepAwakeActivity.compactOnFor(150 * 3_600) == "6d")
+        #expect(KeepAwakeActivity.compactOnFor(1_000 * 3_600) == "41d")
+    }
+
+    @Test func theEyesAndHowLongItsBeenOnFitBesideTheNotch() {
         let keepAwake = makeKeepAwake()
-        // Just on, and on for days: the island keeps its width, since only the two glyphs show beside the notch.
-        for hours in [0, 99] as [TimeInterval] {
-            keepAwake.start(since: clock.now.addingTimeInterval(-hours * 3_600))
-            #expect(keepAwake.compactSlotWidth == KeepAwakeActivity.glyphSlotWidth)
+        keepAwake.start()
+        let eyes = NSHostingView(rootView: keepAwake.compactLeading).fittingSize
+        #expect(eyes.width <= keepAwake.compactLeadingWidth && eyes.height <= IslandLayout.compactGlyphHeight, "\(eyes)")
+        // However long it has been on, the island keeps its width.
+        for seconds in [0, 12 * 60, 9 * 3_600 + 59 * 60, 23 * 3_600, 150 * 3_600, 1_000 * 3_600] as [TimeInterval] {
+            keepAwake.start(since: .now.addingTimeInterval(-seconds))
+            let width = NSHostingView(rootView: keepAwake.compactTrailing).fittingSize.width
+            #expect(width <= keepAwake.compactSlotWidth, "\(KeepAwakeActivity.compactOnFor(seconds)) is \(width) pt")
         }
-        for side in [AnyView(keepAwake.compactLeading), AnyView(keepAwake.compactTrailing)] {
-            #expect(NSHostingView(rootView: side).fittingSize.width <= keepAwake.compactSlotWidth)
-        }
-        // Beside a countdown, its eye takes the left in the timer's wider slot.
-        #expect(KeepAwakeActivity.glyphSlotWidth <= TimerActivity(activities: activities, keepsMacAwake: false).compactSlotWidth)
+        // Beside a countdown, its eyes take the left, which is no wider than the timer's own.
+        let timer = TimerActivity(activities: activities, keepsMacAwake: false)
+        #expect(keepAwake.compactLeadingWidth <= timer.compactLeadingWidth)
     }
 
     @Test func theTimerKeepsTheRightBesideTheNotch() {
@@ -231,6 +280,8 @@ final class KeepAwakeActivityTests {
         let notch = NotchMetrics(size: CGSize(width: 179, height: 32), compactHeight: 33)
         let room = CGSize(width: IslandLayout.expandedSize.width - 2 * IslandLayout.expandedContentInset,
                           height: IslandLayout.expandedContentRoom(notch))
+        // Off with Claude Code at work, its two buttons stand one above the other beside the line.
+        keepAwake.agentsAreWorking = { true }
         for on in [false, true] {
             if on { keepAwake.start(since: clock.now.addingTimeInterval(-99 * 3_600)) }
             let size = NSHostingView(rootView: keepAwake.tab).fittingSize
@@ -244,81 +295,140 @@ final class KeepAwakeActivityTests {
         #expect(!keepAwake.isLive)
     }
 
-    // MARK: The eye and the laptop
+    // MARK: The eyes
 
-    @Test func everyGlyphMovesOnOneBeat() {
-        let beat = KeepAwakeBeat(gap: { 3_600 })
-        let eye = CountingFollower()
-        let laptop = CountingFollower()
-        beat.add(eye)
-        beat.add(laptop)
+    @Test func everyPairOfEyesMakesTheSameMoveOnOneBeat() {
+        // Each move asked for differs from the last, so pairs that each asked for their own would differ.
+        let moves = MoveStub()
+        let beat = KeepAwakeBeat(gap: { 3_600 }, move: { moves.next() })
+        let besideTheNotch = CountingFollower()
+        let onHome = CountingFollower()
+        beat.add(besideTheNotch)
+        beat.add(onHome)
         #expect(beat.isRunning)
         beat.tick()
-        #expect(eye.beats == 1)
-        #expect(laptop.beats == 1)
+        beat.tick()
+        #expect(besideTheNotch.moves == [.blink, .glance(toRight: true)])
+        #expect(onHome.moves == besideTheNotch.moves)
 
-        beat.remove(eye)
+        beat.remove(besideTheNotch)
         #expect(beat.isRunning)
-        beat.remove(laptop)
+        beat.remove(onHome)
         #expect(!beat.isRunning)
     }
 
-    @Test func theEyeKeepsTheBeatOnlyWhileItBlinksOnScreen() {
+    @Test func mostBeatsAreBlinks() {
+        let moves = (0..<2_000).map { _ in BeatMove.random() }
+        let glances = moves.count { $0 != .blink }
+        #expect(glances > 400 && glances < 800, "\(glances) glances in 2000 beats")
+        #expect(moves.contains(.glance(toRight: true)) && moves.contains(.glance(toRight: false)))
+    }
+
+    @Test func theEyesKeepTheBeatOnlyWhileTheyMoveOnScreen() {
         let beat = KeepAwakeBeat(gap: { 3_600 })
-        let eye = EyeView(pointSize: 13, tint: .white, isOpen: true, opensAsItAppears: false, beat: beat)
-        eye.blinks = true
+        let eyes = makeEyes(isOpen: true, beat: beat)
+        eyes.moves = true
         #expect(!beat.isRunning)
 
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 40, height: 20), styleMask: .borderless,
                               backing: .buffered, defer: true)
-        window.contentView?.addSubview(eye)
+        window.contentView?.addSubview(eyes)
         #expect(beat.isRunning)
-        eye.blinks = false
+        eyes.moves = false
         #expect(!beat.isRunning)
 
-        eye.blinks = true
+        eyes.moves = true
         #expect(beat.isRunning)
-        eye.removeFromSuperview()
+        eyes.removeFromSuperview()
         #expect(!beat.isRunning)
     }
 
-    @Test func theLaptopKeepsTheBeatOnlyWhileItTypesOnScreen() {
-        let beat = KeepAwakeBeat(gap: { 3_600 })
-        let laptop = LaptopView(tint: .white, isOn: true, typesAsItAppears: false, beat: beat)
-        laptop.types = true
-        #expect(!beat.isRunning)
-
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 40, height: 20), styleMask: .borderless,
-                              backing: .buffered, defer: true)
-        window.contentView?.addSubview(laptop)
-        #expect(beat.isRunning)
-        laptop.types = false
-        #expect(!beat.isRunning)
-
-        laptop.types = true
-        laptop.removeFromSuperview()
-        #expect(!beat.isRunning)
+    @Test func theEyesRestOpenOrShut() throws {
+        let eyes = makeEyes(isOpen: true)
+        #expect(eyes.showsEyes && !eyes.showsLids)
+        #expect(eyes.eyeOpenness == [1, 1])
+        // Turned off, they end shut, whichever way they close; turned on again, open.
+        for closing in [EyesClosing.plain, .smile, .tired] {
+            eyes.closing = closing
+            eyes.isOpen = false
+            #expect(!eyes.showsEyes && eyes.showsLids, "\(closing)")
+            eyes.isOpen = true
+            #expect(eyes.showsEyes && !eyes.showsLids, "\(closing)")
+            #expect(eyes.eyeOpenness == [1, 1])
+        }
+        // Just turned on, they start shut and pop open; otherwise they appear as they are, open or shut.
+        let opening = makeEyes(isOpen: true, opensAsItAppears: true)
+        #expect(opening.showsEyes)
+        #expect(animations(in: try #require(opening.layer)).contains("openness"))
+        #expect(!animations(in: try #require(makeEyes(isOpen: true).layer)).contains("openness"))
+        #expect(makeEyes(isOpen: false).showsLids)
     }
 
-    @Test func theLaptopShowsItsCodeOnlyWhileOn() {
-        let laptop = LaptopView(tint: .white, isOn: true, typesAsItAppears: false)
-        #expect(laptop.typed == [1, 1, 1])
-        // Once the eye has closed beside it, the code is gone; turned on again, it is typed back.
-        laptop.isOn = false
-        #expect(laptop.typed == [0, 0, 0])
-        laptop.isOn = true
-        #expect(laptop.typed == [1, 1, 1])
-        // Typing again on the beat ends where it started, with all of the code there.
-        laptop.onBeat()
-        #expect(laptop.typed == [1, 1, 1])
-        // Just turned on, it starts blank and types its code out.
-        #expect(LaptopView(tint: .white, isOn: true, typesAsItAppears: true).typed == [1, 1, 1])
-        #expect(LaptopView(tint: .white, isOn: false, typesAsItAppears: false).typed == [0, 0, 0])
+    @Test func aShutEyeIsACurvedLidNotAFlatLine() throws {
+        for size in [EyesSize.compact, .card, .face] {
+            let metrics = size.metrics
+            let eyes = EyesView(metrics: metrics, tint: .cyan, lidColor: .white, isOpen: false, opensAsItAppears: false)
+            let lids = shapes(in: try #require(eyes.layer)).filter { $0.opacity > 0 }
+            #expect(lids.count == 2, "\(size)")
+            for lid in lids {
+                let bounds = try #require(lid.path?.boundingBoxOfPath)
+                #expect(abs(bounds.width - metrics.eye.width) < 0.01, "\(size)")
+                #expect(bounds.height > metrics.lidDepth - 0.01, "\(size): \(bounds)")
+            }
+        }
     }
 
-    @Test func itsTabShowsTheLaptopStillWithItsCodeOnOrOff() async throws {
+    @Test func theEyesMoveOnTheBeatOnlyWhileOpen() throws {
+        let eyes = makeEyes(isOpen: false)
+        eyes.onBeat(.blink)
+        eyes.onBeat(.glance(toRight: true))
+        #expect(animations(in: try #require(eyes.layer)).isEmpty)
+
+        eyes.isOpen = true
+        eyes.layer?.sublayers?.forEach { removeAnimations(in: $0) }
+        eyes.onBeat(.blink)
+        #expect(animations(in: try #require(eyes.layer)).filter { $0 == "blink" }.count == 2)
+        eyes.onBeat(.glance(toRight: false))
+        #expect(animations(in: try #require(eyes.layer)).contains("glance"))
+    }
+
+    @Test func oneEyePeeksHalfOpenWhileTheyAreShut() {
+        let eyes = makeEyes(isOpen: false)
+        eyes.peeks = true
+        #expect(eyes.eyeOpenness == [Motion.eyePeek, 0])
+        eyes.peeks = false
+        #expect(eyes.eyeOpenness == [0, 0])
+        #expect(eyes.showsLids)
+        // Open, there is nothing to peek from.
+        eyes.isOpen = true
+        eyes.peeks = true
+        #expect(eyes.eyeOpenness == [1, 1])
+    }
+
+    @Test func everyEyeSitsOnHalfPoints() {
+        for size in [EyesSize.compact, .card, .face] {
+            let metrics = size.metrics
+            let left = (metrics.box.width - 2 * metrics.eye.width - metrics.gap) / 2
+            let bottom = (metrics.box.height - metrics.eye.height) / 2
+            for edge in [left, bottom, left + metrics.eye.width, left + metrics.eye.width + metrics.gap,
+                         bottom + metrics.eye.height] {
+                #expect((edge * 2).rounded() == edge * 2, "\(size): \(edge)")
+            }
+        }
+        // The eyes that fly from beside the notch to Home or the tab, scaled by height, land on the eyes there.
+        let compact = EyesSize.compact.metrics
+        for size in [EyesSize.card, .face] {
+            let metrics = size.metrics, scale = metrics.box.height / compact.box.height
+            #expect(abs(compact.eye.width * scale - metrics.eye.width) <= 0.5, "\(size)")
+            #expect(abs(compact.eye.height * scale - metrics.eye.height) <= 0.5, "\(size)")
+            #expect(abs(compact.gap * scale - metrics.gap) <= 0.5, "\(size)")
+            #expect(metrics.box.width == metrics.box.height, "\(size)")
+        }
+    }
+
+    @Test func itsTabShowsItsFaceShutWhileOffAndOpenWhileOn() async throws {
         let keepAwake = makeKeepAwake()
-        let window = NSWindow(contentRect: CGRect(x: -20_000, y: -20_000, width: 448, height: 60),
+        let window = NSWindow(contentRect: CGRect(x: -20_000, y: -20_000, width: 448, height: 100),
                               styleMask: .borderless, backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: KeepAwakeTabHost(keepAwake: keepAwake))
         window.orderFrontRegardless()
@@ -326,24 +436,20 @@ final class KeepAwakeActivityTests {
         try await Task.sleep(for: .milliseconds(50))
         let content = try #require(window.contentView)
 
-        // Off, as its tab is mostly seen: the laptop with its code, where an eye shut to a flat line stood.
-        #expect(views(EyeView.self, in: content).isEmpty)
-        let laptop = try #require(views(LaptopView.self, in: content).first)
-        #expect(views(LaptopView.self, in: content) == [laptop])
-        #expect(laptop.typed == [1, 1, 1])
-        #expect(isPainted(laptop, on: false), "\(String(describing: laptop.painted))")
+        // Off, as its tab is mostly seen: one face, its eyes shut.
+        let face = try #require(views(EyesView.self, in: content).first)
+        #expect(views(EyesView.self, in: content) == [face])
+        #expect(face.metrics == EyesSize.face.metrics)
+        #expect(face.showsLids)
 
-        // Turned on and off from the tab, it stays as it is: nothing types or clears, and nothing waits for the beat.
-        // Only its color changes, which is all that tells on from off now that the eye is gone.
-        for turn in [{ keepAwake.start() }, keepAwake.stop] {
-            turn()
-            try await Task.sleep(for: .milliseconds(50))
-            #expect(views(LaptopView.self, in: content) == [laptop])
-            #expect(laptop.typed == [1, 1, 1])
-            #expect(!laptop.types)
-            #expect(animations(in: try #require(laptop.layer)).isEmpty)
-            #expect(isPainted(laptop, on: keepAwake.isOn), "\(String(describing: laptop.painted))")
-        }
+        keepAwake.start()
+        try await waitUntil { face.showsEyes }
+        #expect(views(EyesView.self, in: content) == [face])
+
+        keepAwake.stop()
+        try await waitUntil { face.showsLids }
+        try await waitUntil { !keepAwake.isLive }
+        #expect(views(EyesView.self, in: content) == [face])
     }
 
     @Test func aBeatWithOnlyGoneGlyphsStops() {
@@ -358,12 +464,23 @@ final class KeepAwakeActivityTests {
     }
 }
 
+/// Hands out a blink, then a glance, and so on.
+@MainActor
+private final class MoveStub {
+    private var count = 0
+
+    func next() -> BeatMove {
+        count += 1
+        return count % 2 == 1 ? .blink : .glance(toRight: true)
+    }
+}
+
 @MainActor
 private final class CountingFollower: BeatFollower {
-    private(set) var beats = 0
+    private(set) var moves: [BeatMove] = []
 
-    func onBeat() {
-        beats += 1
+    func onBeat(_ move: BeatMove) {
+        moves.append(move)
     }
 }
 
@@ -398,17 +515,25 @@ private func views<Found: NSView>(_ kind: Found.Type, in view: NSView) -> [Found
     }
 }
 
-/// Whether the laptop is painted as Keep Awake is: in a full, saturated color while on (cyan, though the test host's
-/// light look resolves it differently from the island's dark one), and in dim white while off.
+/// A pair of eyes as its card on Home shows them, keeping its own beat.
 @MainActor
-private func isPainted(_ laptop: LaptopView, on: Bool) -> Bool {
-    guard let paint = laptop.painted?.usingColorSpace(.sRGB) else { return false }
-    return on
-        ? paint.alphaComponent == 1 && paint.saturationComponent > 0.5
-        : abs(paint.alphaComponent - 0.36) < 0.01 && paint.saturationComponent == 0
+private func makeEyes(isOpen: Bool, opensAsItAppears: Bool = false, beat: KeepAwakeBeat = KeepAwakeBeat(gap: { 3_600 }))
+    -> EyesView {
+    EyesView(metrics: EyesSize.card.metrics, tint: .cyan, lidColor: .white, isOpen: isOpen,
+             opensAsItAppears: opensAsItAppears, beat: beat)
 }
 
 /// The keys of every animation running in `layer` and the layers inside it.
 private func animations(in layer: CALayer) -> [String] {
     (layer.animationKeys() ?? []) + (layer.sublayers ?? []).flatMap { animations(in: $0) }
+}
+
+private func removeAnimations(in layer: CALayer) {
+    layer.removeAllAnimations()
+    layer.sublayers?.forEach { removeAnimations(in: $0) }
+}
+
+/// Every shape layer in `layer`, however deep.
+private func shapes(in layer: CALayer) -> [CAShapeLayer] {
+    ((layer as? CAShapeLayer).map { [$0] } ?? []) + (layer.sublayers ?? []).flatMap { shapes(in: $0) }
 }

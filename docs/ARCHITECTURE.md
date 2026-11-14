@@ -32,10 +32,10 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 
 ## Motion and drawing
 - Every animation parameter lives in `Island/Motion.swift`. Views don't define their own springs.
-- The glyph left of the notch is drawn over the island's content (`IslandGlyphFlyer`), so it can leave its slot: as the island opens it travels to its own place there, if the tab shown marks one with `islandGlyph` (the timer's ring, a subscription's logo, a session's circle, Keep Awake's eye on Home), and gives way to the glyph that belongs there once it lands. It travels back as the island closes. With Reduce Motion it stays in its slot.
+- The glyph left of the notch is drawn over the island's content (`IslandGlyphFlyer`), so it can leave its slot: as the island opens it travels to its own place there, if the tab shown marks one with `islandGlyph` (the timer's ring, a subscription's logo, a session's circle, Keep Awake's eyes), and gives way to the glyph that belongs there once it lands. It travels back as the island closes. With Reduce Motion it stays in its slot.
 - Always-on ambient animations (visualizers, pulses) use Core Animation rather than repeating SwiftUI animations; on a MacBook Air that measured about 8–10× less CPU. Core Animation moves the cost rather than removing it, though: a continuous animation still cost WindowServer about 16 CPU points.
 - Displays that change slowly, like the timer's countdown, redraw once a second with `TimelineView(.periodic)` and no animation (about 0.35% CPU). Rolling digits and `ProgressView(timerInterval:)` both drew at 60 fps. A number that only changes now and then, like a usage percentage or the battery's charge, does roll as it changes (`Motion.numberTransition`).
-- Keep Awake's eye and laptop move on one shared beat (`KeepAwakeBeat`), so Jambul wakes once for both.
+- Keep Awake's eyes, beside the notch, on Home and on its tab, all blink or glance on one shared beat (`KeepAwakeBeat`), so Jambul wakes once for every pair.
 - Views that redraw by themselves hold still while nobody can see the island (`IslandModel.isVisible`).
 
 ## Usage limits
@@ -73,8 +73,8 @@ Anything due while the Mac sleeps waits for `NSWorkspace.didWakeNotification` be
 - Full-screen detection is `SpaceInspector`, which reads SkyLight's Space type (4 is full screen) on each Space change. SkyLight is a private framework, so it is loaded at runtime, and if it ever goes away every Space reads as a regular desktop.
 
 ## Buttons inside the island
-- Buttons inside the island fire on the first click and don't reach the island's own tap. They're styled with `IslandButtonStyle`, whose fill is the hit area.
+- Buttons inside the island fire on the first click and don't reach the island's own tap. They're styled with `IslandButtonStyle`, whose fill is the hit area. Only a tab's main action is prominent, a solid fill in its activity's color; the others are flat gray.
 - They never use `.disabled`: a disabled button passes the click through to the island's toggle.
 - Tabs use `IslandTabButtonStyle`, whose capsule is the hit area, though only the chosen tab draws it.
 - Home's cards are buttons whose whole card is the hit area. The battery's card has no tab to open, so it isn't a button, and a click on it toggles the island like a click on any other part of it.
-- A control that gives way to another in the same spot, like Keep Awake's Stop to Turn On, swaps only as the live activities change. That arms the guard against the rest of a double click (`IslandModel.acceptsPress`).
+- A control that gives way to another in the same spot, like Keep Awake's Turn Off to Turn On, swaps only as the live activities change. That arms the guard against the rest of a double click (`IslandModel.acceptsPress`).

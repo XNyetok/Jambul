@@ -6,6 +6,8 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ### Changed
 - Claude Code's Done and Stopped peeks show a check that draws itself and an exclamation mark instead of an eye.
+- Keep Awake has a pair of eyes that open, blink and fall asleep, a face on its tab that turns it on or off, and how long it has been on beside the notch.
+- Buttons in the island are smaller and flat, and only a tab's main action is filled with its color.
 
 ## [0.4.0] - 2026-11-14
 A livelier island: the glyph beside the notch travels into the open island, activities take turns there, and Jambul now needs macOS 27.

@@ -130,6 +130,8 @@ private struct PeekIcon: View {
         if peek.motion == .draw {
             let shown = arrived || reduceMotion
             PeekCheck(tint: peek.tint, scale: shown ? 1 : 0, drawn: shown ? 1 : 0)
+        } else if let closing = peek.motion.eyesClosing {
+            PeekEyes(tint: peek.tint, closing: closing)
         } else if let logo = peek.logo {
             Image(logo)
                 .resizable()
@@ -166,6 +168,23 @@ private struct PeekIcon: View {
         case .shake: reduceMotion ? [0] : Motion.Agent.shakeOffsets
         default: [1]
         }
+    }
+}
+
+/// Keep Awake's eyes on a peek: open as it comes out, then closing as `closing` says, once the peek is out of its blur.
+private struct PeekEyes: View {
+    let tint: Color
+    let closing: EyesClosing
+    @State private var asleep = false
+
+    var body: some View {
+        KeepAwakeEyes(size: .card, isOpen: !asleep, closing: closing, tint: tint, lidColor: tint.opacity(0.7),
+                      keepsTheBeat: false)
+            .accessibilityHidden(true)
+            .task {
+                try? await Task.sleep(for: Motion.peekEyesWait, tolerance: Motion.timerTolerance)
+                if !Task.isCancelled { asleep = true }
+            }
     }
 }
 

@@ -21,10 +21,10 @@ final class KeepAwakeActivity: IslandActivity {
     var title: String { String(localized: "Keep Awake") }
     var isLive: Bool { since != nil }
     var tint: Color { .cyan }
-    var tabSymbol: String { "eye.fill" }
+    var tabSymbol: String { "eyes.inverse" }
     var homeCardIsQuiet: Bool { !isOn }
-    /// The eye, which its card on Home shows too.
-    var compactGlyph: String? { "keepAwake.eye" }
+    /// The eyes, which its tab and its card on Home show too.
+    var compactGlyph: String? { "keepAwake.eyes" }
 
     /// When it was turned on; nil while off.
     private(set) var since: Date?
@@ -33,17 +33,30 @@ final class KeepAwakeActivity: IslandActivity {
     /// Whether a Claude Code session is in a turn now, for offering to stay on until it finishes. Read inside views, so
     /// they follow it.
     @ObservationIgnored var agentsAreWorking: @MainActor () -> Bool = { false }
-    /// True for the moment the eye takes to close after it is turned off, before it leaves the island.
+    /// True for the moment the eyes take to close after it is turned off, before it leaves the island.
     private(set) var isClosing = false
+    /// How the eyes close: plainly when the owner turns it off, with a smile or heavy lids when it turns itself off.
+    private(set) var closing = EyesClosing.plain
 
     /// On, as far as the owner is concerned: turned on and not yet turned off.
     var isOn: Bool { since != nil && !isClosing }
 
+    /// Closing its eyes as it turns itself off, for Claude Code having finished or the battery running low. Nobody
+    /// clicked, so no double click is under way and a click may turn it straight back on.
+    var isTurningItselfOff: Bool { isClosing && closing != .plain }
+
+    /// Whether its tab offers Turn Off rather than Turn On. After the owner's own Turn Off, Turn Off stays until Keep
+    /// Awake leaves the live activities, once its eyes have closed (`Motion.eyesClosing`): that change arms the guard
+    /// against the rest of a double click on it (`IslandModel.acceptsPress`). Turning itself off, Turn On shows at once.
+    var offersTurnOff: Bool { isLive && !isTurningItselfOff }
+
     /// Whether this is holding the screen on right now.
     var isKeepingScreenOn: Bool { assertion != nil }
 
-    /// The eye on one side and the laptop on the other, however long it has been on.
-    var compactSlotWidth: CGFloat { Self.glyphSlotWidth }
+    /// How long it has been on, beside the notch on the right of its eyes (`compactOnFor`).
+    var compactSlotWidth: CGFloat { Self.timeSlotWidth }
+    /// The eyes.
+    var compactLeadingWidth: CGFloat { EyesSize.compact.metrics.box.width }
 
     /// Weak, since the center holds its activities.
     @ObservationIgnored private weak var activities: ActivityCenter?
@@ -51,6 +64,7 @@ final class KeepAwakeActivity: IslandActivity {
     @ObservationIgnored private let bootSession: String?
     @ObservationIgnored private let now: @MainActor () -> Date
     @ObservationIgnored private let holdsScreen: Bool
+    @ObservationIgnored private let closingTime: @MainActor (EyesClosing) -> Duration
     @ObservationIgnored private var assertion: (any NSObjectProtocol)?
     @ObservationIgnored private var lastPower: PowerState?
     @ObservationIgnored private var closeTask: Task<Void, Never>?
@@ -60,14 +74,17 @@ final class KeepAwakeActivity: IslandActivity {
     ///   - bootSession: Tells this run of the Mac from the next, so a restart doesn't bring it back.
     ///   - now: The current time; tests pass their own clock.
     ///   - holdsScreen: Whether it really holds the screen on; previews and most tests turn it off.
+    ///   - closingTime: How long it stays in the island while its eyes close; tests pass their own.
     init(activities: ActivityCenter, defaults: UserDefaults = .standard,
          bootSession: String? = KeepAwakeActivity.currentBootSession(),
-         now: @escaping @MainActor () -> Date = { .now }, holdsScreen: Bool = true) {
+         now: @escaping @MainActor () -> Date = { .now }, holdsScreen: Bool = true,
+         closingTime: @escaping @MainActor (EyesClosing) -> Duration = { Motion.eyesClosing($0) }) {
         self.activities = activities
         self.defaults = defaults
         self.bootSession = bootSession
         self.now = now
         self.holdsScreen = holdsScreen
+        self.closingTime = closingTime
         restore()
     }
 
@@ -95,8 +112,8 @@ final class KeepAwakeActivity: IslandActivity {
         Logger.activities.notice("keep awake off, agents finished")
         activities?.peek(Peek(symbol: "eye.slash.fill", tint: tint, title: String(localized: "Keep Awake off"),
                               detail: String(localized: "Claude Code finished"), duration: Self.offPeekDuration,
-                              source: id))
-        stop()
+                              source: id, motion: .smilingEyes))
+        stop(.smile)
     }
 
     /// Turns it on as if it had been on since `date`, for the Debug menu and tests.
@@ -108,15 +125,29 @@ final class KeepAwakeActivity: IslandActivity {
         begin(since: date)
     }
 
-    /// Lets the screen sleep again at once. The eye closes, and then it leaves the island.
-    func stop() {
+    /// A click on its face: off while on, and on while off. While its eyes close after the owner turned it off, a click
+    /// is the rest of that double click and does nothing, as on Turn Off; while they close as it turns itself off, a
+    /// click turns it back on.
+    func toggleFromFace() {
+        if isOn {
+            stop()
+        } else if !isLive || isTurningItselfOff {
+            start()
+        }
+    }
+
+    /// Lets the screen sleep again at once. The eyes close, and then it leaves the island.
+    /// - Parameter closing: How the eyes close: plainly, or with the expression of why it turned itself off.
+    func stop(_ closing: EyesClosing = .plain) {
         guard isOn else { return }
         holdScreen(false)
         forget()
+        self.closing = closing
         isClosing = true
         Logger.activities.notice("keep awake off")
+        let wait = closingTime(closing)
         closeTask = Task { [weak self] in
-            try? await Task.sleep(for: Motion.eyeClose, tolerance: Motion.timerTolerance)
+            try? await Task.sleep(for: wait, tolerance: Motion.timerTolerance)
             guard !Task.isCancelled, let self else { return }
             since = nil
             isClosing = false
@@ -138,23 +169,36 @@ final class KeepAwakeActivity: IslandActivity {
         // In the same turn as the change, as the center asks. It follows the battery's own warning.
         activities?.peek(Peek(symbol: "eye.slash.fill", tint: tint, title: String(localized: "Keep Awake off"),
                               detail: String(localized: "Battery \(state.percent)%"), duration: Self.offPeekDuration,
-                              mustBeSeen: true, source: id))
-        stop()
+                              mustBeSeen: true, source: id, motion: .tiredEyes))
+        stop(.tired)
     }
 
-    /// What its tab says about it: when it was turned on, and from a minute on, for how long, like "On since 09:41" and
-    /// then "On since 09:41 · 1h 05m". Never "0m", which read as nothing worth showing.
-    /// On until Claude Code finishes, it says so in place of when, like "Until Claude Code finishes · 12m".
-    static func sinceLine(since: Date, at date: Date, untilAgentsFinish: Bool = false,
-                          locale: Locale = .autoupdatingCurrent) -> String {
+    /// The large line on its tab while on: "Awake" for the first minute, then for how long, like "1h 05m". Never "0m",
+    /// which read as nothing worth showing.
+    static func headline(since: Date, at date: Date) -> String {
         let seconds = date.timeIntervalSince(since)
-        if untilAgentsFinish {
-            guard seconds >= 60 else { return String(localized: "Until Claude Code finishes") }
-            return String(localized: "Until Claude Code finishes · \(elapsed(seconds))")
-        }
+        return seconds >= 60 ? elapsed(seconds) : String(localized: "Awake")
+    }
+
+    /// The line under it: since when, like "Since 09:41" while the large line says "Awake" and "Awake since 09:41" once
+    /// it says for how long; on until Claude Code finishes, that instead.
+    static func detailLine(since: Date, at date: Date, untilAgentsFinish: Bool = false,
+                           locale: Locale = .autoupdatingCurrent) -> String {
+        if untilAgentsFinish { return String(localized: "Until Claude Code finishes") }
         let time = since.formatted(.dateTime.hour().minute().locale(locale))
-        guard seconds >= 60 else { return String(localized: "On since \(time)") }
-        return String(localized: "On since \(time) · \(elapsed(seconds))")
+        return date.timeIntervalSince(since) >= 60 ? String(localized: "Awake since \(time)")
+            : String(localized: "Since \(time)")
+    }
+
+    /// How long it has been on, short enough for beside the notch: "On" for the first minute, then "12m", "1h05", from
+    /// ten hours only the hours, like "12h", and from a hundred hours the days, like "4d", so it never grows past "9h59".
+    static func compactOnFor(_ seconds: TimeInterval) -> String {
+        let minutes = max(Int(seconds / 60), 0)
+        if minutes < 1 { return String(localized: "On") }
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        if hours < 10 { return "\(hours)h" + String(format: "%02d", minutes % 60) }
+        return hours < 100 ? "\(hours)h" : "\(hours / 24)d"
     }
 
     /// What its card on Home says: "On" for the first minute, then for how long, like "12m" or "1h 05m". Never "0m".
