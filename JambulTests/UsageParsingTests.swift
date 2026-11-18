@@ -72,12 +72,15 @@ struct UsageParsingTests {
             {"type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":10,\
             "window_minutes":300,"resets_at":1800000000},"secondary":null}}}
             {"type":"response_item","payload":{"type":"message"}}
-            {"type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":37.5,\
+            {"timestamp":"2030-01-15T00:00:00.125Z","type":"event_msg","payload":{"type":"token_count",\
+            "rate_limits":{"primary":{"used_percent":37.5,\
             "window_minutes":300,"resets_at":1800003600},"secondary":{"used_percent":80,"window_minutes":10080,\
             "resets_at":1800500000}}}}
             {"type":"response_item","payload":{"type":"message"}}
             """
-        let windows = try #require(UsageParsing.codexWindows(fromSessionLog: log))
+        let reading = try #require(UsageParsing.codexReading(fromSessionLog: log, modifiedAt: .distantFuture))
+        let windows = reading.windows
+        #expect(reading.measuredAt == Date(timeIntervalSince1970: 1_894_665_600.125))
         #expect(windows.map(\.id) == ["primary", "secondary"])
         #expect(windows.map(\.label) == ["5h", "wk"])
         #expect(windows.map(\.used) == [0.375, 0.8])
@@ -89,14 +92,22 @@ struct UsageParsingTests {
             {"payload":{"rate_limits":{"limit_id":"codex","primary":{"used_percent":20,"window_minutes":300}}}}
             {"payload":{"rate_limits":{"limit_id":"premium","primary":{"used_percent":90,"window_minutes":300}}}}
             """
-        let windows = try #require(UsageParsing.codexWindows(fromSessionLog: log))
-        #expect(windows.map(\.used) == [0.2])
+        let reading = try #require(UsageParsing.codexReading(fromSessionLog: log, modifiedAt: .distantPast))
+        #expect(reading.windows.map(\.used) == [0.2])
+        #expect(reading.measuredAt == .distantPast)
     }
 
     @Test func aCodexLogWithoutLimitsHasNoWindows() {
-        #expect(UsageParsing.codexWindows(fromSessionLog: #"{"type":"response_item"}"#) == nil)
+        #expect(UsageParsing.codexReading(fromSessionLog: #"{"type":"response_item"}"#, modifiedAt: .now) == nil)
         // The end of a log can start halfway through a line.
-        #expect(UsageParsing.codexWindows(fromSessionLog: #"5,"rate_limits":{"primary":{"used_percent":1}}}}"#) == nil)
+        let partial = #"5,"rate_limits":{"primary":{"used_percent":1}}}}"#
+        #expect(UsageParsing.codexReading(fromSessionLog: partial, modifiedAt: .now) == nil)
+    }
+
+    @Test func readsTheSingleBucketFromOlderCodexAccountReports() throws {
+        let report = ["rateLimits": ["primary": ["usedPercent": 22, "windowDurationMins": 300]]]
+        let windows = try #require(UsageParsing.codexWindows(fromAccountReport: report))
+        #expect(windows == [UsageWindow(id: "primary", label: "5h", used: 0.22, resetsAt: nil)])
     }
 
     @Test(arguments: [(300, "5h"), (10_080, "wk"), (43_200, "30d"), (1_440, "1d"), (90, "90m")])

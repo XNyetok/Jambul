@@ -98,24 +98,38 @@ enum UsageParsing {
         return windows.isEmpty ? nil : windows
     }
 
-    /// The last limits a Codex session log recorded: `rate_limits.primary` and `secondary`, each with `used_percent`,
-    /// `window_minutes` and `resets_at`. `log` is the end of a log, one JSON event per line. Logs also carry other
-    /// limits, like "premium"; only the one named "codex", or one without a name, counts.
-    static func codexWindows(fromSessionLog log: String) -> [UsageWindow]? {
+    /// The last quota event in a Codex session log. Older events can also be dated by the file's write time.
+    static func codexReading(fromSessionLog log: String, modifiedAt: Date) -> UsageReading? {
         for line in log.split(separator: "\n").reversed() where line.contains("\"rate_limits\"") {
-            guard let event = try? JSONSerialization.jsonObject(with: Data(line.utf8)),
-                  let limits = value(forKey: "rate_limits", in: event) as? [String: Any] else { continue }
-            if let name = limits["limit_id"] as? String, name != "codex" { continue }
-            let windows = ["primary", "secondary"].compactMap { key -> UsageWindow? in
-                guard let window = limits[key] as? [String: Any], let percent = number(window["used_percent"]) else {
-                    return nil
-                }
-                let label = number(window["window_minutes"]).map { label(forMinutes: Int($0)) } ?? ""
-                return UsageWindow(id: key, label: label, used: clamped(percent / 100), resetsAt: date(window["resets_at"]))
-            }
-            if !windows.isEmpty { return windows }
+            guard let event = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+                  let limits = value(forKey: "rate_limits", in: event) as? [String: Any],
+                  let windows = codexWindows(in: limits, camelCase: false) else { continue }
+            return UsageReading(provider: .codex, windows: windows, measuredAt: date(event["timestamp"]) ?? modifiedAt)
         }
         return nil
+    }
+
+    /// The App Server's account report. Newer clients can return a quota bucket for each group of models.
+    static func codexWindows(fromAccountReport report: [String: Any]) -> [UsageWindow]? {
+        let buckets = report["rateLimitsByLimitId"] as? [String: Any]
+        if let limits = buckets?["codex"] as? [String: Any], let windows = codexWindows(in: limits, camelCase: true) {
+            return windows
+        }
+        guard let limits = report["rateLimits"] as? [String: Any] else { return nil }
+        return codexWindows(in: limits, camelCase: true)
+    }
+
+    private static func codexWindows(in limits: [String: Any], camelCase: Bool) -> [UsageWindow]? {
+        if let name = limits[camelCase ? "limitId" : "limit_id"] as? String, name != "codex" { return nil }
+        let windows = ["primary", "secondary"].compactMap { key -> UsageWindow? in
+            guard let window = limits[key] as? [String: Any],
+                  let percent = number(window[camelCase ? "usedPercent" : "used_percent"]), percent.isFinite
+            else { return nil }
+            let minutes = number(window[camelCase ? "windowDurationMins" : "window_minutes"]).flatMap(Int.init(exactly:))
+            return UsageWindow(id: key, label: minutes.map(label(forMinutes:)) ?? "", used: clamped(percent / 100),
+                               resetsAt: date(window[camelCase ? "resetsAt" : "resets_at"]))
+        }
+        return windows.isEmpty ? nil : windows
     }
 
     /// A window's length as written beside its bar: "5h", "wk", "30d".

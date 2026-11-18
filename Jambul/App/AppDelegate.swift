@@ -120,13 +120,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startUsage() {
         activities.onPeekShown = { [usage] in usage.peekWasShown($0) }
-        usage.onTabAppear = { [usage, antigravityUsage] in
+        usage.onTabAppear = { [usage, antigravityUsage, codexUsage] in
             if usage.enabled.contains(.antigravity) { antigravityUsage.refresh() }
+            if usage.enabled.contains(.codex) { codexUsage.refresh() }
         }
         usage.onConnect = { [weak self] _ in self?.openSettings() }
         antigravityUsage.onReading = { [usage] in usage.record($0) }
         antigravityUsage.onProblem = { [usage] in usage.markProblem(.antigravity, $0) }
         codexUsage.onReading = { [usage] in usage.record($0) }
+        codexUsage.onProblem = { [usage] in usage.markProblem(.codex, $0) }
         // The island applies its own settings; the usage settings ride along.
         let islandSettingsChanged = preferences.onChange
         preferences.onChange = { [weak self] in
@@ -140,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.usage.checkResets()
                 if self.usage.enabled.contains(.antigravity) { self.antigravityUsage.refresh() }
+                if self.usage.enabled.contains(.codex) { self.codexUsage.refresh() }
             }
         }
         applyUsagePreferences()
