@@ -43,10 +43,10 @@ Jambul makes no network connections and collects no data. Its settings stay in i
 
 For Claude Code's sessions, once you agree in Settings, Jambul adds hooks to `~/.claude/settings.json`, keeping a copy of the original and leaving your other hooks as they are. Each hook hands what Claude Code tells it to Jambul over a socket only your account can open, and returns at once. When a session goes quiet in the middle of a turn, Jambul reads the end of its transcript to see whether you stopped it. Turning the sessions off takes Jambul's hooks out again.
 
-For usage limits, Jambul only reads what the tools on your Mac already know:
+Jambul gets usage limits from the tools on your Mac.
 - **Claude:** once you agree in Settings, Jambul adds itself to Claude Code's status line in `~/.claude/settings.json`, keeping a copy of the original. Your status line looks the same; it also hands its input to Jambul over a socket only your account can open. Turning Claude off puts your status line back exactly.
 - **Antigravity:** Jambul runs `agy -p /usage --output-format json`, Antigravity's own usage report, which sends no prompt to a model. agy asks Google for the numbers itself.
-- **Codex:** Jambul reads the limits Codex writes into its session logs in `~/.codex/sessions`.
+- **Codex** uses the CLI’s existing sign-in to fetch account limits without sending a prompt. Jambul also reads the limits Codex writes to its local session logs.
 
 Jambul never reads a login token.
 

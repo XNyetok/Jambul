@@ -269,7 +269,7 @@ private struct UsageColumn: View {
     }
 
     private var detailText: String {
-        if let problem = activity.problems[provider], reading == nil { return problem }
+        if let problem = activity.problems[provider], reading == nil || provider == .codex { return problem }
         guard let reading, let fullest else { return String(localized: "No numbers yet") }
         if fullest.hasReset(at: now) { return String(localized: "limit reset") }
         if now.timeIntervalSince(reading.measuredAt) > 30 * 60, provider != .claude {

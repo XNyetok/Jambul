@@ -189,7 +189,7 @@ extension SettingsView {
             return switch provider {
             case .claude: String(localized: "Off · reads Claude Code’s status line")
             case .antigravity: String(localized: "Off · asks agy for its usage report")
-            case .codex: String(localized: "Off · reads Codex’s session logs")
+            case .codex: String(localized: "Off · asks the Codex CLI for account usage")
             }
         }
         if provider == .claude, !preferences.claudeStatusLineAgreed { return String(localized: "Not connected") }
@@ -198,7 +198,7 @@ extension SettingsView {
         return switch provider {
         case .claude: String(localized: "Connected · numbers arrive with Claude Code’s next reply")
         case .antigravity: String(localized: "Waiting for agy")
-        case .codex: String(localized: "Waiting for Codex’s next session")
+        case .codex: String(localized: "Waiting for Codex usage")
         }
     }
 }

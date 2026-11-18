@@ -122,13 +122,17 @@ final class UsageActivity: IslandActivity {
     /// - Parameter isCurrent: Whether the numbers were just heard from the provider, as opposed to a Claude Code
     ///   session repeating what it heard a while ago.
     func record(_ newReading: UsageReading, isCurrent: Bool = true) {
-        let reading = Self.settled(newReading, after: readings[newReading.provider], isCurrent: isCurrent)
+        let previous = readings[newReading.provider]
+        if let previous, newReading.provider == .codex, newReading.measuredAt < previous.measuredAt { return }
+        let reading = Self.settled(newReading, after: previous, isCurrent: isCurrent)
         if problems[reading.provider] != nil { problems[reading.provider] = nil }
         // Claude Code updates its status line many times a minute while it works, mostly with the same numbers; those
-        // change nothing, so nothing is saved and nothing redraws.
-        guard readings[reading.provider]?.windows != reading.windows else { return }
+        // change nothing. Codex also tracks when it last confirmed its numbers.
+        let windowsChanged = previous?.windows != reading.windows
+        guard windowsChanged || (reading.provider == .codex && previous?.measuredAt != reading.measuredAt) else { return }
         readings[reading.provider] = reading
         save()
+        guard windowsChanged else { return }
         if alerts.forgetLevels(above: reading) { saveAlerts() }
         // A warning still waiting for the island is no longer true once its window reads lower.
         waitingAlerts = waitingAlerts.filter { _, alert in
@@ -159,7 +163,7 @@ final class UsageActivity: IslandActivity {
     /// number only drops once it is lower by more than `flickerPoints`: a provider can hand usage back before the
     /// window ends.
     static func settled(_ reading: UsageReading, after previous: UsageReading?, isCurrent: Bool = true) -> UsageReading {
-        guard let previous else { return reading }
+        guard reading.provider != .codex, let previous else { return reading }
         var kept = reading
         kept.windows = reading.windows.map { window in
             // Without a reset time there's no telling one window from the next, so the new number stands.

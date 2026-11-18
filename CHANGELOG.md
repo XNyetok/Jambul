@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed
+- Codex usage refreshes from the account when Jambul starts, Home or Usage opens, or the Mac wakes.
+
 ## [0.5.0] - 2026-11-14
 Keep Awake gets a pair of eyes, the timer a kitchen-timer dial, and the island's buttons a flat, smaller look.
 

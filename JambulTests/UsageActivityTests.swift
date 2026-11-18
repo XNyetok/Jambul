@@ -256,6 +256,29 @@ struct UsageActivityTests {
         #expect(usage.readings[.codex]?.windows.first?.used == 0.2)
     }
 
+    @Test func codexKeepsTheNewestReadingEvenWhenTheNumbersStayTheSame() {
+        let usage = makeUsage()
+        let first = UsageReading(provider: .codex, windows: [
+            UsageWindow(id: "primary", label: "5h", used: 0.33, resetsAt: clock.now.addingTimeInterval(3_600)),
+        ], measuredAt: clock.now)
+        usage.record(first)
+        var confirmed = first
+        confirmed.measuredAt.addTimeInterval(60)
+        usage.record(confirmed)
+        #expect(usage.readings[.codex] == confirmed)
+
+        var late = first
+        late.windows[0].used = 0.9
+        usage.record(late)
+        #expect(usage.readings[.codex] == confirmed)
+
+        var lower = confirmed
+        lower.measuredAt.addTimeInterval(60)
+        lower.windows[0].used = 0.32
+        usage.record(lower)
+        #expect(usage.readings[.codex] == lower)
+    }
+
     @Test func usageStartsWithClaudeAndAntigravityAndAsksBeforeClaude() throws {
         let suiteName = "JambulTests.UsagePreferences"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

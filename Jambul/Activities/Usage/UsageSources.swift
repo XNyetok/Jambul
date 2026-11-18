@@ -245,7 +245,7 @@ enum OnlineWait {
 }
 
 /// A process the timeout may stop from another task: asked to quit first, then killed if it hasn't after a moment.
-private final class RunningProcess: @unchecked Sendable {
+final class RunningProcess: @unchecked Sendable {
     static let killAfter: Duration = .seconds(2)
     private let process: Process
 
@@ -261,77 +261,5 @@ private final class RunningProcess: @unchecked Sendable {
             try? await Task.sleep(for: Self.killAfter)
             if process.isRunning { kill(pid, SIGKILL) }
         }
-    }
-}
-
-/// Reads Codex's limits from its session logs, which Codex writes as it works, so nothing runs and nothing is asked
-/// over the network. Each change to a log is read from its end.
-@MainActor
-final class CodexUsageSource {
-    /// How much of the end of a log is read: enough for several events.
-    nonisolated static let tailLength = 256 * 1024
-    nonisolated static var sessionsFolder: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/sessions")
-    }
-
-    var onReading: (@MainActor (UsageReading) -> Void)?
-    private var watcher: FolderWatcher?
-
-    func start() {
-        guard watcher == nil else { return }
-        watcher = FolderWatcher(folder: Self.sessionsFolder, latency: 2) { [weak self] paths in
-            let logs = paths.filter { $0.hasSuffix(".jsonl") }
-            guard !logs.isEmpty else { return }
-            self?.read(logs.map { URL(filePath: $0) })
-        }
-        Task {
-            if let newest = await Self.newestLog() { read([newest]) }
-        }
-    }
-
-    func stop() {
-        watcher?.stop()
-        watcher = nil
-    }
-
-    private func read(_ logs: [URL]) {
-        Task {
-            guard let (windows, written) = await Self.windows(in: logs) else { return }
-            // As of when Codex wrote them, so a log days old doesn't pass for fresh numbers.
-            onReading?(UsageReading(provider: .codex, windows: windows, measuredAt: written))
-        }
-    }
-
-    /// The limits in the most recently changed of `logs`, and when that log was written.
-    private nonisolated static func windows(in logs: [URL]) async -> ([UsageWindow], Date)? {
-        await Task.detached(priority: .utility) {
-            let newest = logs.max { modified($0) < modified($1) }
-            guard let newest, let handle = try? FileHandle(forReadingFrom: newest) else { return nil }
-            defer { try? handle.close() }
-            let size = (try? handle.seekToEnd()) ?? 0
-            try? handle.seek(toOffset: size > UInt64(tailLength) ? size - UInt64(tailLength) : 0)
-            guard let data = try? handle.readToEnd(),
-                  let windows = UsageParsing.codexWindows(fromSessionLog: String(decoding: data, as: UTF8.self))
-            else { return nil }
-            return (windows, modified(newest))
-        }.value
-    }
-
-    private nonisolated static func newestLog() async -> URL? {
-        await Task.detached(priority: .utility) {
-            let enumerator = FileManager.default.enumerator(at: sessionsFolder,
-                                                            includingPropertiesForKeys: [.contentModificationDateKey])
-            var newest: (url: URL, date: Date)?
-            while let url = enumerator?.nextObject() as? URL {
-                guard url.pathExtension == "jsonl" else { continue }
-                let date = modified(url)
-                if newest.map({ date > $0.date }) ?? true { newest = (url, date) }
-            }
-            return newest?.url
-        }.value
-    }
-
-    private nonisolated static func modified(_ url: URL) -> Date {
-        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
     }
 }
