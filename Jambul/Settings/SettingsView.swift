@@ -7,7 +7,7 @@ struct SettingsView: View {
     var usage: UsageActivity?
     var agent: AgentActivity?
     @State private var confirmingClaude = false
-    @State private var confirmingSessions = false
+    @State private var confirmingSessions: UsageProvider?
     /// Whether the question about connecting Claude came from turning it on, so No turns it off again.
     @State private var confirmingFromToggle = false
 
@@ -80,12 +80,14 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle(isOn: showsSessions) {
-                    Text("Claude Code sessions")
-                    Text(sessionsStatus)
+                ForEach(UsageProvider.sessionProviders, id: \.self) { provider in
+                    Toggle(isOn: showsSessions(provider)) {
+                        Text(provider.sessionName)
+                        Text(sessionsStatus(provider))
+                    }
                 }
             } header: {
-                Text("Claude Code")
+                Text("Coding sessions")
             } footer: {
                 Text("Shows when a session works, needs you or is done, and lets Keep Awake stay on until it finishes.")
                     .font(.caption)
@@ -135,11 +137,13 @@ struct SettingsView: View {
         } message: {
             Text("Jambul adds itself to Claude Code’s status line in ~/.claude/settings.json to read your usage limits. Your status line looks the same, and turning Claude off puts it back exactly as it was.")
         }
-        .alert("Connect Claude Code sessions?", isPresented: $confirmingSessions) {
-            Button("Connect") { preferences.showsAgentSessions = true }
+        .alert("Connect coding sessions?", isPresented: Binding(
+            get: { confirmingSessions != nil }, set: { if !$0 { confirmingSessions = nil } }
+        ), presenting: confirmingSessions) { provider in
+            Button("Connect") { preferences.agentProviders.insert(provider) }
             Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Jambul adds hooks to ~/.claude/settings.json that tell it what each session does. Your other hooks stay as they are, sessions you start from now on show, and turning this off takes Jambul’s hooks out again.")
+        } message: { provider in
+            Text(sessionConsent(provider))
         }
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
@@ -167,17 +171,38 @@ extension SettingsView {
     }
 
     /// Asks before adding the hooks; turning it off takes them out.
-    private var showsSessions: Binding<Bool> {
+    private func showsSessions(_ provider: UsageProvider) -> Binding<Bool> {
         Binding {
-            preferences.showsAgentSessions
+            preferences.agentProviders.contains(provider)
         } set: { on in
-            if on { confirmingSessions = true } else { preferences.showsAgentSessions = false }
+            if on { confirmingSessions = provider } else { preferences.agentProviders.remove(provider) }
         }
     }
 
-    private var sessionsStatus: String {
-        guard preferences.showsAgentSessions else { return String(localized: "Off · reads Claude Code’s hooks") }
-        return agent?.problem ?? String(localized: "Connected · sessions you start from now on show")
+    private func sessionsStatus(_ provider: UsageProvider) -> String {
+        if let problem = agent?.problems[provider] { return problem }
+        guard preferences.agentProviders.contains(provider) else { return String(localized: "Off") }
+        switch provider {
+        case .claude:
+            return String(localized: "Connected · sessions you start from now on show")
+        case .codex:
+            return agent?.codexRuntimeAvailable == true
+                ? String(localized: "Shared runtime connected · review new hooks in /hooks")
+                : String(localized: "Hooks installed · review in /hooks, then start a local session")
+        case .antigravity:
+            return String(localized: "Connected · reopen agy to pick up the hooks and status line")
+        }
+    }
+
+    private func sessionConsent(_ provider: UsageProvider) -> String {
+        switch provider {
+        case .claude:
+            String(localized: "Jambul adds its hooks to ~/.claude/settings.json. Other hooks keep running, and turning sessions off removes Jambul’s hooks.")
+        case .codex:
+            String(localized: "Jambul adds its own local Codex hooks. Review them in /hooks before they can run. Jambul reads session status from the shared local runtime when it’s available.")
+        case .antigravity:
+            String(localized: "Jambul adds a group to ~/.gemini/config/hooks.json and joins agy’s status line to see when an approval dialog is open. Your status line stays visible, and turning sessions off restores its settings.")
+        }
     }
 
     private var needsConnectingClaude: Bool {

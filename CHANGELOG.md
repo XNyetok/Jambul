@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Added
+- Follow local Codex and Antigravity sessions alongside Claude Code in one Sessions tab. A single indicator counts active sessions, and Keep Awake can wait for all of them.
+
 ## [0.5.1] - 2026-11-19
 Jambul keeps Codex limits up to date between sessions.
 

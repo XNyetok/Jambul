@@ -160,7 +160,7 @@ final class GlyphFlightTests {
 
     @Test func aWorkingSessionsCircleIsWhereClaudesLogoTravels() async throws {
         let agent = AgentActivity(activities: activities)
-        agent.isConnected = true
+        agent.connectedProviders = [.claude]
         agent.receive(AgentEvent(kind: .sessionStart, session: "s1", cwd: "/tmp/work/Jambul"))
         agent.receive(AgentEvent(kind: .prompt, session: "s1", cwd: "/tmp/work/Jambul"))
         let glyph = try #require(agent.compactGlyph)

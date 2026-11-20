@@ -179,7 +179,7 @@ private struct KeepAwakeControls: View {
                     Label("Turn On", systemImage: "power")
                 }
                 .buttonStyle(.islandProminent(tint: activity.tint))
-                // While Claude Code works, Keep Awake can turn itself off as it finishes.
+                // While sessions are active, Keep Awake can turn itself off as they finish.
                 if activity.agentsAreWorking() {
                     // Asked again on the click: the last turn may have ended since this was drawn, and then there's
                     // nothing to stay on for.
@@ -189,7 +189,7 @@ private struct KeepAwakeControls: View {
                         Label("Until Done", systemImage: "flag.fill")
                     }
                     .buttonStyle(.island())
-                    .accessibilityLabel(Text("Keep Awake Until Claude Code Finishes"))
+                    .accessibilityLabel(Text("Keep Awake Until Sessions Finish"))
                 }
             }
         }

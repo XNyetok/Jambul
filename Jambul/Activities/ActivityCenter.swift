@@ -52,6 +52,14 @@ final class ActivityCenter {
         onWithdrawPeeks?(source, topic)
     }
 
+    @ObservationIgnored var onResolvePeek: (@MainActor (String, String) -> Void)?
+
+    /// An answered request can disappear even if its peek is already showing.
+    func resolvePeek(from source: String, topic: String) {
+        withdrawPeeks(from: source, topic: topic)
+        onResolvePeek?(source, topic)
+    }
+
     /// Called by the island as it starts showing a peek, for an activity that only counts news as told once seen.
     @ObservationIgnored var onPeekShown: (@MainActor (Peek) -> Void)?
 

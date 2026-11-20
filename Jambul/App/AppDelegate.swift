@@ -30,11 +30,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         socketPath: Self.supportFolder.appending(path: "usage.sock").path)
     private lazy var agent = AgentActivity(activities: activities)
     private var agentSocket: InputSocket?
+    private var appliedAgentProviders: Set<UsageProvider>?
+    private lazy var sessionRelay = SessionRelay(executable: Self.supportFolder.appending(path: "session-relay"),
+                                                 socketPath: agentHooks.socketPath)
+    private let codexSessions = CodexSessionSource()
+    private let antigravitySessions = AntigravitySessionSource()
     /// The app in front before the one just activated, to tell unlocking the screen from the owner switching apps.
     private var lastActiveApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     private lazy var agentHooks = AgentHookInstaller(
         settingsURL: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/settings.json"),
         socketPath: Self.supportFolder.appending(path: "agent.sock").path)
+    private lazy var codexHooks = AgentHookInstaller(
+        settingsURL: CodexSessionSource.home.appending(path: "hooks.json"),
+        socketPath: sessionRelay.socketPath, codexRelay: sessionRelay)
+    private lazy var antigravityHooks = AntigravitySessionInstaller(
+        hooks: JSONSettingsFile(url: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".gemini/config/hooks.json")),
+        settings: JSONSettingsFile(url: FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: ".gemini/antigravity-cli/settings.json")),
+        savedURL: Self.supportFolder.appending(path: "agy-statusline.json"), relay: sessionRelay)
     #if DEBUG
     private let demo = DemoActivity()
     #endif
@@ -208,12 +221,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Claude Code sessions
+    // MARK: - Coding sessions
 
     private func startAgent(keepAwake: KeepAwakeActivity) {
         agent.onConnect = { [weak self] in self?.openSettings() }
         agent.onAllFinished = { [weak keepAwake] in keepAwake?.agentsFinished() }
+        agent.onMonitoringLost = { [weak keepAwake] in keepAwake?.stopWaitingForAgents() }
         keepAwake.agentsAreWorking = { [agent] in agent.isLive }
+        codexSessions.onUpdate = { [agent] in agent.receive($0) }
+        codexSessions.onConnectionChange = { [agent] in agent.codexRuntimeAvailable = $0 }
+        antigravitySessions.onUpdate = { [agent] in agent.receive($0) }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
+                                                          queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.codexSessions.refresh() }
+        }
         // In the terminal of a session waiting on the owner, they see its request.
         // Not when unlocking the screen brings the terminal back: nobody has seen the request yet.
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
@@ -236,46 +257,89 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyAgentPreferences()
     }
 
-    /// Adds Jambul's hooks to Claude Code as the owner turns its sessions on, and takes them out as they turn them off.
     private func applyAgentPreferences() {
-        if preferences.showsAgentSessions {
-            startAgentSocket()
+        let wanted = preferences.agentProviders
+        let previous = appliedAgentProviders
+        guard wanted != previous else { return }
+        appliedAgentProviders = wanted
+        if !wanted.isEmpty { startAgentSocket() }
+        for provider in UsageProvider.sessionProviders where wanted.contains(provider) != previous?.contains(provider) {
             do {
-                // Writes nothing when the hooks are already right.
-                try agentHooks.install()
-                if agentSocket != nil { agent.problem = nil }
-            } catch {
-                agent.problem = String(localized: "Couldn’t change Claude Code’s settings")
-                Logger.app.error("agent: couldn't connect Claude Code's hooks: \(error, privacy: .public)")
-            }
-            agent.isConnected = true
-        } else {
-            if agentHooks.hasAny() {
-                do {
-                    try agentHooks.uninstall()
-                } catch {
-                    Logger.app.error("agent: couldn't disconnect Claude Code's hooks: \(error, privacy: .public)")
+                if wanted.contains(provider) {
+                    guard agentSocket != nil else {
+                        agent.problems[provider] = String(localized: "Couldn’t open the session socket")
+                        continue
+                    }
+                    try connectSessions(provider)
+                } else {
+                    try disconnectSessions(provider)
                 }
+                agent.problems[provider] = nil
+            } catch {
+                agent.problems[provider] = String(localized: "Couldn’t update \(provider.sessionName) settings")
+                Logger.app.error("agent: couldn't update \(provider.rawValue, privacy: .public) settings")
             }
+        }
+        if wanted.isEmpty {
             agentSocket?.stop()
             agentSocket = nil
-            agent.isConnected = false
-            agent.problem = nil
-            agent.forgetSessions()
             keepAwake?.stopWaitingForAgents()
+        }
+    }
+
+    private func connectSessions(_ provider: UsageProvider) throws {
+        if provider != .claude {
+            guard let executable = Bundle.main.executableURL else { throw CocoaError(.fileNoSuchFile) }
+            try sessionRelay.pointToApp(executable)
+        }
+        switch provider {
+        case .claude: try agentHooks.install()
+        case .codex:
+            try codexHooks.install()
+            codexSessions.start()
+        case .antigravity: try antigravityHooks.install()
+        }
+        agent.connectedProviders.insert(provider)
+    }
+
+    private func disconnectSessions(_ provider: UsageProvider) throws {
+        agent.connectedProviders.remove(provider)
+        agent.forgetSessions(from: provider)
+        switch provider {
+        case .claude:
+            if agentHooks.hasAny() { try agentHooks.uninstall() }
+        case .codex:
+            codexSessions.stop()
+            if codexHooks.hasAny() { try codexHooks.uninstall() }
+        case .antigravity:
+            antigravitySessions.stop()
+            if antigravityHooks.hasAny() { try antigravityHooks.uninstall() }
         }
     }
 
     private func startAgentSocket() {
         guard agentSocket == nil else { return }
-        let socket = InputSocket(path: agentHooks.socketPath, name: "Claude Code's hooks",
-                                 keepsStartOfLargeInput: true) { [agent] in agent.receive($0) }
+        let socket = InputSocket(path: agentHooks.socketPath, name: "coding sessions",
+                                 keepsStartOfLargeInput: true) { [weak self] in self?.receiveAgentInput($0) }
         do {
             try socket.start()
             agentSocket = socket
         } catch {
-            agent.problem = String(localized: "Couldn’t listen for Claude Code")
-            Logger.app.error("agent: couldn't open the socket: \(error, privacy: .public)")
+            Logger.app.error("agent: couldn't open the session socket")
+        }
+    }
+
+    private func receiveAgentInput(_ data: Data) {
+        if data.starts(with: AgentSessionUpdate.socketHeader) {
+            guard let update = AgentSessionUpdate.fromSocket(data),
+                  agent.connectedProviders.contains(update.provider) else { return }
+            switch update.provider {
+            case .codex: codexSessions.receiveHook(update)
+            case .antigravity: antigravitySessions.receive(update)
+            case .claude: break
+            }
+        } else if agent.connectedProviders.contains(.claude) {
+            agent.receive(data)
         }
     }
 
@@ -351,7 +415,7 @@ extension AppDelegate: NSMenuItemValidation {
 extension ActivityCenter {
     /// Registers Jambul's own activities, for the app, its previews and its tests alike. The order they register in is
     /// the order of the open island's tabs and of the cards on Home: Home first, where the island opens as Jambul
-    /// starts, then the usage limits, Claude Code's sessions, Keep Awake and the timer. The battery has no tab, so its
+    /// starts, then the usage limits, coding sessions, Keep Awake and the timer. The battery has no tab, so its
     /// card comes last on Home. Between live activities of the same priority, the one registered first also takes the
     /// right beside the notch.
     func registerJambulsActivities(home: HomeActivity, usage: UsageActivity, agent: AgentActivity,

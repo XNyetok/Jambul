@@ -14,8 +14,10 @@ struct IslandView: View {
         let shape = IslandShape(topRadius: layout.topRadius, bottomRadius: layout.bottomRadius)
         let compact = model.compactActivities
         let showsCompact = !compact.isEmpty && (presentation == .compact || presentation == .lifted)
+        let sessionFlight = presentation == .expanded && !glyphLanded && !reduceMotion ? model.sessionGlyphFlight : nil
         // The glyph left of the notch, if it has a place in the open island to travel to.
-        let glyph = compact.isEmpty || reduceMotion ? nil : CompactContent.leadingGlyph(of: compact)
+        let glyph = sessionFlight?.glyph
+            ?? (compact.isEmpty || reduceMotion ? nil : CompactContent.leadingGlyph(of: compact))
 
         ZStack(alignment: .top) {
             // No shadow: its window is only a little larger than the open island and cut the shadow off in a line.
@@ -49,15 +51,17 @@ struct IslandView: View {
                 // the open island moved to its own place if it has one, where it gives way once it lands to the glyph
                 // that belongs there.
                 let place = presentation == .expanded ? glyph.flatMap { shown[$0] } : nil
-                if !compact.isEmpty, showsCompact || place != nil, let slotWidth = model.compactSlotWidth,
-                   let leadingWidth = model.compactLeadingWidth {
+                if (sessionFlight != nil || !compact.isEmpty), showsCompact || place != nil,
+                   let slotWidth = sessionFlight?.trailingWidth ?? model.compactSlotWidth,
+                   let leadingWidth = sessionFlight?.leadingWidth ?? model.compactLeadingWidth {
                     // Landed, it is hidden but stays as it is, ticking or blinking unseen while the island is open:
                     // told that nobody can see it, a glyph could trade one view for another, and the new one would
                     // start its way back from the slot rather than fly there.
                     let isShown = showsCompact || !glyphLanded
                     let inset = IslandLayout.compactInset(notch)
                     HStack(spacing: 0) {
-                        IslandGlyphFlyer(glyph: CompactContent.leading(of: compact), place: place, glyphs: glyphs)
+                        IslandGlyphFlyer(glyph: sessionFlight?.view ?? CompactContent.leading(of: compact),
+                                         place: place, glyphs: glyphs)
                             .frame(width: leadingWidth, height: IslandLayout.compactGlyphHeight)
                         Spacer(minLength: 0)
                     }
@@ -66,7 +70,7 @@ struct IslandView: View {
                     // On its own short fade either way, so it is there as soon as it sets off back.
                     .animation(Motion.glyphLanding) { $0.opacity(isShown ? 1 : 0) }
                     .foregroundStyle(.white)
-                    .id(CompactContent.leadingID(of: compact))
+                    .id(sessionFlight?.slotID ?? CompactContent.leadingID(of: compact))
                     .transition(Motion.contentTransition)
                 }
             }

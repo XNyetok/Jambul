@@ -2,7 +2,7 @@ import AppKit
 import os
 import SwiftUI
 
-/// A Claude Code session, as its hooks tell it.
+/// A coding session as reported by its local client.
 struct AgentSession: Equatable, Identifiable {
     enum State: Equatable {
         /// Started, with no turn yet.
@@ -15,9 +15,12 @@ struct AgentSession: Equatable, Identifiable {
         case failed
         /// The turn was stopped with Esc, or the session waits for a prompt without having said why.
         case stopped
+        case unavailable
     }
 
     let id: String
+    var provider: UsageProvider = .claude
+    var turn: String?
     var project: String
     var terminal: String?
     var transcriptPath: String?
@@ -56,7 +59,7 @@ struct AgentSession: Equatable, Identifiable {
         case .working: 1
         case .failed: 2
         case .done: 3
-        case .stopped: 4
+        case .stopped, .unavailable: 4
         case .ready: 5
         }
     }
@@ -72,10 +75,7 @@ struct AgentSession: Equatable, Identifiable {
     }
 }
 
-/// Claude Code's sessions: which work, which wait on the owner, and how their turns ended. Their hooks tell it
-/// (`AgentHookInstaller`), so nothing here checks anything while a session is quiet, with one exception: Claude Code
-/// runs no hook when a turn is stopped with Esc, so a session that falls quiet mid-turn has its transcript read once a
-/// minute later, and then every few minutes for as long as it stays quiet, to see whether it was stopped.
+/// All coding sessions share one activity, regardless of which local client reports them.
 @MainActor
 @Observable
 final class AgentActivity: IslandActivity {
@@ -92,11 +92,12 @@ final class AgentActivity: IslandActivity {
     static let forgetAfter: TimeInterval = 8 * 3_600
 
     let id = "agent"
-    var title: String { String(localized: "Claude Code") }
-    var tint: Color { UsageProvider.claude.brandColor }
+    var title: String { String(localized: "Sessions") }
+    var tint: Color { liveSession?.provider.brandColor ?? .white }
     var tabSymbol: String { "chevron.left.forwardslash.chevron.right" }
     /// Its logo.
-    var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight }
+    var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight + 22 }
+    var compactSlotWidth: CGFloat { 59 }
     /// The session beside the notch, whose circle the tab and the card on Home show: the logo travels to it.
     var compactGlyph: String? { liveSession.map(Self.glyph) }
 
@@ -104,17 +105,28 @@ final class AgentActivity: IslandActivity {
     var isLive: Bool { sessions.values.contains(where: \.isActive) }
     var priority: ActivityPriority { sessions.values.contains(where: \.needsYou) ? .high : .low }
     var showsHomeCard: Bool { isConnected && !shownSessions.isEmpty }
+    var homeCardIsQuiet: Bool { !isLive }
+    var activeCount: Int { sessions.values.filter(\.isActive).count }
+    static let rowsPerPage = 2
+    var sessionPage = 0
+
+    func visibleSessions(in sessions: [AgentSession]) -> ArraySlice<AgentSession> {
+        let start = min(sessionPage, max(0, (sessions.count - 1) / Self.rowsPerPage)) * Self.rowsPerPage
+        return sessions.dropFirst(start).prefix(Self.rowsPerPage)
+    }
 
     private(set) var sessions: [String: AgentSession] = [:]
-    /// Whether Jambul listens to Claude Code's hooks; the tab offers to connect them while it doesn't.
-    var isConnected = false
-    /// Something that went wrong connecting, for the tab.
-    var problem: String?
+    var connectedProviders: Set<UsageProvider> = []
+    var isConnected: Bool { !connectedProviders.isEmpty }
+    var problems: [UsageProvider: String] = [:]
+    var codexRuntimeAvailable = false
 
     /// Asks for the hooks to be connected, from the tab.
     @ObservationIgnored var onConnect: (@MainActor () -> Void)?
     /// Called as the last working session finishes, for Keep Awake.
     @ObservationIgnored var onAllFinished: (@MainActor () -> Void)?
+    /// Losing a source is different from finishing its work.
+    @ObservationIgnored var onMonitoringLost: (@MainActor () -> Void)?
 
     /// Weak, since the center holds its activities.
     @ObservationIgnored private weak var activities: ActivityCenter?
@@ -124,6 +136,10 @@ final class AgentActivity: IslandActivity {
     @ObservationIgnored private let quietCheck: Duration
     @ObservationIgnored private let quietRecheck: Duration
     @ObservationIgnored private var quietTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var lastUpdates: [String: Date] = [:]
+    @ObservationIgnored private let completionWindow: Duration
+    @ObservationIgnored private var completionPeeks: [String: Peek] = [:]
+    @ObservationIgnored private var completionTask: Task<Void, Never>?
 
     /// - Parameters:
     ///   - now: The current time; tests pass their own clock.
@@ -134,25 +150,37 @@ final class AgentActivity: IslandActivity {
     init(activities: ActivityCenter, now: @escaping @MainActor () -> Date = { .now },
          frontmostApp: @escaping @MainActor () -> String? = { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
          readTranscript: @escaping @Sendable (String) -> AgentTranscript? = AgentTranscript.read,
-         quietCheck: Duration = .seconds(60), quietRecheck: Duration = .seconds(5 * 60)) {
+         quietCheck: Duration = .seconds(60), quietRecheck: Duration = .seconds(5 * 60),
+         completionWindow: Duration = .milliseconds(450)) {
         self.activities = activities
         self.now = now
         self.frontmostApp = frontmostApp
         self.readTranscript = readTranscript
         self.quietCheck = quietCheck
         self.quietRecheck = quietRecheck
+        self.completionWindow = completionWindow
     }
 
-    /// The sessions worth showing, the most pressing first, then the most recent.
+    /// Keep active rows stable as their tools change, with the oldest unanswered request first.
     var shownSessions: [AgentSession] {
         sessions.values.filter { $0.state != .ready }.sorted {
-            $0.urgency != $1.urgency ? $0.urgency < $1.urgency : $0.lastEventAt > $1.lastEventAt
+            if $0.urgency != $1.urgency { return $0.urgency < $1.urgency }
+            if $0.needsYou, $0.stateSince != $1.stateSince { return $0.stateSince < $1.stateSince }
+            if $0.isActive, $0.turnStartedAt != $1.turnStartedAt {
+                return ($0.turnStartedAt ?? $0.stateSince) < ($1.turnStartedAt ?? $1.stateSince)
+            }
+            if !$0.isActive, $0.lastEventAt != $1.lastEventAt { return $0.lastEventAt > $1.lastEventAt }
+            return $0.id < $1.id
         }
     }
 
     /// The session beside the notch: the most pressing of those in a turn.
     var liveSession: AgentSession? {
         shownSessions.first(where: \.isActive)
+    }
+
+    static func sessionID(_ session: String, provider: UsageProvider) -> String {
+        "\(provider.rawValue):\(session)"
     }
 
     /// Takes a hook's input from the socket.
@@ -165,9 +193,10 @@ final class AgentActivity: IslandActivity {
         let wasActive = isLive
         let date = now()
         forgetOldSessions(at: date)
+        let sessionID = Self.sessionID(event.session, provider: .claude)
         // Named once, by the folder it started in: `cd` in a command doesn't rename it.
-        var session = sessions[event.session]
-            ?? AgentSession(id: event.session, project: event.project ?? String(localized: "Claude Code"),
+        var session = sessions[sessionID]
+            ?? AgentSession(id: sessionID, project: event.project ?? UsageProvider.claude.sessionName,
                             stateSince: date, lastEventAt: date)
         let before = session.state
         if let terminal = event.terminal { session.terminal = terminal }
@@ -227,7 +256,7 @@ final class AgentActivity: IslandActivity {
             session.turnEndedAt = date
             session.reply = event.error
         case .sessionEnd:
-            end(event.session, wasActive: wasActive)
+            end(sessionID, wasActive: wasActive)
             return
         }
         // A turn can also start without a prompt, like when a background task the agent waits on ends.
@@ -240,7 +269,7 @@ final class AgentActivity: IslandActivity {
         }
         if !session.needsYou { session.request = nil }
         if before != session.state { session.stateSince = date }
-        sessions[event.session] = session
+        sessions[sessionID] = session
         // Keep Awake hears first: its peek saying it turned off gives way to the one saying how the turn ended, which
         // matters more, while the eye leaving the notch still shows it.
         finishIfDone(wasActive: wasActive, turnEnded: !session.isActive && Self.isActive(before)
@@ -252,12 +281,91 @@ final class AgentActivity: IslandActivity {
         watchQuiet(session)
     }
 
-    /// Forgets every session, for when the hooks are disconnected. Nothing finished, so Keep Awake isn't told so.
-    func forgetSessions() {
-        for task in quietTasks.values { task.cancel() }
-        quietTasks = [:]
-        sessions = [:]
-        activities?.withdrawPeeks(from: id)
+    /// Updates from the Codex and Antigravity readers. Timestamps and turn ids protect the current turn when delivery
+    /// of a hook or daemon response falls behind.
+    func receive(_ update: AgentSessionUpdate) {
+        let id = Self.sessionID(update.session, provider: update.provider)
+        guard update.kind != .finishing, lastUpdates[id].map({ update.date >= $0 }) ?? true else { return }
+        let existing = sessions[id]
+        if let current = existing?.turn, let turn = update.turn, current != turn,
+           update.kind != .prompted, update.kind != .working { return }
+        if let existing, let turn = update.turn, existing.turn == turn, existing.turnEndedAt != nil,
+           existing.state == .done || existing.state == .failed,
+           update.kind == .prompted || update.kind == .working { return }
+        if update.kind == .closed {
+            lastUpdates[id] = update.date
+            if let existing { end(id, wasActive: isLive, turnEnded: existing.isActive) }
+            return
+        }
+        guard existing != nil || update.kind == .opened || update.kind == .prompted || update.kind == .working
+                || update.kind == .approval || update.kind == .question else { return }
+        let date = now()
+        lastUpdates[id] = update.date
+        var session = existing ?? AgentSession(id: id, provider: update.provider,
+            project: update.project ?? update.provider.sessionName, stateSince: date, lastEventAt: date)
+        let before = session.state
+        if let app = update.terminal { session.terminal = app }
+        let newTurn = update.turn != nil && update.turn != session.turn
+        if let turn = update.turn { session.turn = turn }
+        switch update.kind {
+        case .opened:
+            break
+        case .prompted, .working:
+            session.state = .working
+        case .approval, .question:
+            session.state = .needsYou(isQuestion: update.kind == .question)
+        case .idle:
+            if session.isActive { session.state = .stopped }
+        case .done:
+            session.state = .done
+        case .failed:
+            session.state = .failed
+        case .interrupted:
+            session.state = .stopped
+        case .unavailable:
+            if session.isActive { session.state = .unavailable }
+        case .closed, .finishing:
+            return
+        }
+        let started = session.isActive && (newTurn || !Self.isActive(before))
+        if started {
+            session.turnStartedAt = date
+            session.turnEndedAt = nil
+            completionPeeks.removeValue(forKey: id)
+        }
+        if before != session.state || started {
+            session.stateSince = date
+            session.lastEventAt = date
+            if !session.isActive { session.turnEndedAt = date }
+        }
+        let wasActive = isLive
+        if existing != session { sessions[id] = session }
+        if (update.kind.endsTurn || update.kind == .idle), before != session.state, existing?.turnEndedAt == nil {
+            finishIfDone(wasActive: wasActive, turnEnded: true)
+        }
+        if session.state == .unavailable, Self.isActive(before) { onMonitoringLost?() }
+        if before != session.state { announce(session, after: before) }
+        if session.isActive {
+            if quietTasks[id] == nil || before != session.state { watchExternal(session) }
+        } else {
+            quietTasks.removeValue(forKey: id)?.cancel()
+        }
+        if existing == nil { forgetOldSessions(at: date) }
+    }
+
+    /// Disconnecting a provider retires its rows and queued news without touching the other providers.
+    func forgetSessions(from provider: UsageProvider? = nil) {
+        let removed = sessions.values.filter { provider == nil || $0.provider == provider }
+        let prefix = provider.map { "\($0.rawValue):" }
+        lastUpdates = lastUpdates.filter { entry in prefix.map { !entry.key.hasPrefix($0) } ?? false }
+        completionPeeks = completionPeeks.filter { entry in prefix.map { !entry.key.hasPrefix($0) } ?? false }
+        for session in removed {
+            quietTasks.removeValue(forKey: session.id)?.cancel()
+            sessions.removeValue(forKey: session.id)
+            activities?.resolvePeek(from: id, topic: session.id)
+        }
+        activities?.withdrawPeeks(from: id, topic: provider == nil ? nil : "completed")
+        if removed.contains(where: \.isActive) { onMonitoringLost?() }
     }
 
     /// The owner brought an app forward. In the terminal of a session waiting on them they see the request, and
@@ -266,13 +374,13 @@ final class AgentActivity: IslandActivity {
     func appActivated(_ bundleIdentifier: String?) {
         guard let bundleIdentifier else { return }
         let waiting = sessions.values.filter { $0.needsYou && $0.terminal == bundleIdentifier }
-        guard waiting.count == 1, let session = waiting.first else { return }
+        guard waiting.count == 1, let session = waiting.first, session.provider == .claude else { return }
         activities?.withdrawPeeks(from: id, topic: session.id)
     }
 
     /// Brings the app a session runs in forward.
     func openTerminal(for session: AgentSession) {
-        let bundle = session.terminal ?? "com.apple.Terminal"
+        guard let bundle = session.terminal ?? (session.provider == .claude ? "com.apple.Terminal" : nil) else { return }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
@@ -294,12 +402,12 @@ final class AgentActivity: IslandActivity {
 
     // MARK: - Private
 
-    private func end(_ id: String, wasActive: Bool) {
-        if sessions[id]?.needsYou == true { activities?.withdrawPeeks(from: self.id, topic: id) }
+    private func end(_ id: String, wasActive: Bool, turnEnded: Bool = true) {
+        if sessions[id]?.needsYou == true { activities?.resolvePeek(from: self.id, topic: id) }
         quietTasks.removeValue(forKey: id)?.cancel()
         sessions[id] = nil
         Logger.activities.notice("agent: session ended")
-        finishIfDone(wasActive: wasActive, turnEnded: true)
+        finishIfDone(wasActive: wasActive, turnEnded: turnEnded)
     }
 
     /// Forgets sessions whose turn ended long ago, checked as hooks arrive rather than on a timer.
@@ -308,38 +416,88 @@ final class AgentActivity: IslandActivity {
             && date.timeIntervalSince(session.lastEventAt) >= Self.forgetAfter {
             sessions[id] = nil
         }
+        lastUpdates = lastUpdates.filter { sessions[$0.key] != nil || date.timeIntervalSince($0.value) < Self.forgetAfter }
     }
 
     /// Tells the owner what changed, if it is worth a peek.
     private func announce(_ session: AgentSession, after before: AgentSession.State) {
         if case .needsYou = before, !session.needsYou {
             // Answered in the terminal: a peek still waiting would say something no longer true.
-            activities?.withdrawPeeks(from: id, topic: session.id)
+            activities?.resolvePeek(from: id, topic: session.id)
         }
+        let name = session.provider == .claude ? session.project : "\(session.provider.sessionName) · \(session.project)"
         switch session.state {
         case .needsYou(let isQuestion):
             if case .needsYou = before { return }
-            let title = isQuestion ? String(localized: "Asks you · \(session.project)")
-                : String(localized: "Needs you · \(session.project)")
+            let title = isQuestion ? String(localized: "Asks you · \(name)")
+                : String(localized: "Needs you · \(name)")
             activities?.peek(Peek(symbol: isQuestion ? "questionmark.bubble.fill" : "hand.raised.fill", tint: .yellow,
                                   title: title, subtitle: session.step, duration: .seconds(5), mustBeSeen: true,
-                                  source: id, topic: session.id, motion: .pulse))
+                                  source: id, topic: session.id, motion: .pulse, priority: .request))
         case .done:
             // Behind another session's request, if one waits: its peek must be seen, so this one follows it.
             let took = session.turnStartedAt.map { now().timeIntervalSince($0) }
             let watched = session.terminal != nil && frontmostApp() == session.terminal
             if watched, let took, took < Self.watchedTurn { return }
-            activities?.peek(Peek(symbol: "checkmark.circle.fill", tint: tint,
-                                  title: String(localized: "Done · \(session.project)"),
-                                  detail: took.map(Self.duration), subtitle: session.reply ?? session.workSummary,
-                                  duration: .seconds(4), source: id, topic: session.id, motion: .draw))
+            postCompletion(Peek(symbol: "checkmark.circle.fill", tint: session.provider.brandColor,
+                                title: String(localized: "Done · \(name)"),
+                                detail: took.map(Self.duration), subtitle: session.reply ?? session.workSummary,
+                                duration: .seconds(4), source: id, topic: session.id, motion: .draw), for: session.id)
         case .failed:
             activities?.peek(Peek(symbol: "exclamationmark.circle.fill", tint: .red,
-                                  title: String(localized: "Stopped · \(session.project)"), subtitle: session.reply,
+                                  title: String(localized: "Stopped · \(name)"), subtitle: session.reply,
                                   duration: .seconds(4), mustBeSeen: true, source: id, topic: session.id,
                                   motion: .shake))
         default:
             break
+        }
+    }
+
+    private func postCompletion(_ peek: Peek, for session: String) {
+        if completionWindow == .zero {
+            activities?.peek(peek)
+            return
+        }
+        completionPeeks[session] = peek
+        guard completionTask == nil else { return }
+        completionTask = Task { [weak self, completionWindow] in
+            try? await Task.sleep(for: completionWindow)
+            guard let self, !Task.isCancelled else { return }
+            completionTask = nil
+            let peeks = completionPeeks
+            completionPeeks.removeAll()
+            if peeks.count == 1, let peek = peeks.values.first {
+                activities?.peek(peek)
+            } else if peeks.count > 1 {
+                activities?.peek(Peek(symbol: "checkmark.circle.fill", tint: .white,
+                                      title: String(localized: "\(peeks.count) sessions finished"),
+                                      duration: .seconds(4), source: id, topic: "completed", motion: .draw))
+            }
+        }
+    }
+
+    /// A detached terminal or missing terminal event eventually goes quiet without a completion notification.
+    private func watchExternal(_ session: AgentSession) {
+        quietTasks.removeValue(forKey: session.id)?.cancel()
+        let limit = session.needsYou ? Self.waitingStaleAfter : Self.staleAfter
+        let key = session.id
+        quietTasks[key] = Task { [weak self] in
+            var remaining = limit
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(remaining), tolerance: .seconds(1))
+                guard !Task.isCancelled, let self, let last = lastUpdates[key], var session = sessions[key],
+                      session.isActive else { return }
+                remaining = limit - now().timeIntervalSince(last)
+                if remaining > 0 { continue }
+                session.state = .unavailable
+                session.stateSince = now()
+                session.lastEventAt = session.stateSince
+                sessions[key] = session
+                quietTasks[key] = nil
+                activities?.resolvePeek(from: id, topic: key)
+                onMonitoringLost?()
+                return
+            }
         }
     }
 
@@ -407,6 +565,7 @@ final class AgentActivity: IslandActivity {
         case .done: "done"
         case .failed: "failed"
         case .stopped: "stopped"
+        case .unavailable: "unavailable"
         }
     }
 }

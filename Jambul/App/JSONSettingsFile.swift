@@ -1,13 +1,13 @@
 import Foundation
 
-/// Claude Code's settings, ~/.claude/settings.json, which Jambul joins through its status line and its hooks. A symbolic
-/// link is followed, so a dotfiles setup keeps working.
-struct ClaudeSettingsFile {
+/// A client settings file. Follow symlinks so a dotfiles setup keeps working.
+struct JSONSettingsFile {
     let url: URL
 
     enum Failure: Error, Equatable {
         /// The settings aren't JSON Jambul can read, so it leaves them alone.
         case unreadableSettings
+        case settingsChanged
     }
 
     /// The file to read and write: the settings, or what their link points to.
@@ -26,7 +26,10 @@ struct ClaudeSettingsFile {
 
     /// Writes the settings in one step, after keeping the first version Jambul ever changed. Settings Jambul created
     /// and emptied again are removed rather than left behind as `{}`.
-    func write(_ settings: [String: Any]) throws {
+    func write(_ settings: [String: Any], replacing expected: [String: Any]? = nil) throws {
+        if let expected, try NSDictionary(dictionary: read()) != NSDictionary(dictionary: expected) {
+            throw Failure.settingsChanged
+        }
         let fileManager = FileManager.default
         let backup = url.appendingPathExtension("jambul-backup")
         let existed = fileManager.fileExists(atPath: file.path)

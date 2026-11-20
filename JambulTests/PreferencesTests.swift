@@ -23,7 +23,7 @@ struct PreferencesTests {
             #expect(preferences.hapticTaps == 2)
             #expect(!preferences.hidesInFullScreen)
             #expect(preferences.timerSound == "Glass")
-            #expect(!preferences.showsAgentSessions)
+            #expect(preferences.agentProviders.isEmpty)
         }
     }
 
@@ -34,13 +34,13 @@ struct PreferencesTests {
             preferences.hapticTaps = 3
             preferences.hidesInFullScreen = true
             preferences.timerSound = "Hero"
-            preferences.showsAgentSessions = true
+            preferences.agentProviders = [.claude, .codex]
 
             let relaunched = Preferences(defaults: defaults)
             #expect(relaunched.hoverSpeed == .fast)
             #expect(relaunched.hapticTaps == 3)
             #expect(relaunched.hidesInFullScreen)
-            #expect(relaunched.showsAgentSessions)
+            #expect(relaunched.agentProviders == [.claude, .codex])
             #expect(relaunched.timerSound == "Hero")
         }
     }
@@ -49,6 +49,16 @@ struct PreferencesTests {
         withDefaults { defaults in
             Preferences(defaults: defaults).timerSound = nil
             #expect(Preferences(defaults: defaults).timerSound == nil)
+        }
+    }
+
+    @Test func theLegacyPermissionConnectsOnlyClaudeCode() {
+        withDefaults { defaults in
+            defaults.set(true, forKey: "showsAgentSessions")
+            let preferences = Preferences(defaults: defaults)
+            #expect(preferences.agentProviders == [.claude])
+            preferences.agentProviders = []
+            #expect(Preferences(defaults: defaults).agentProviders.isEmpty)
         }
     }
 

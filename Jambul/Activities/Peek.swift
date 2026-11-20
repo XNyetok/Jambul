@@ -29,6 +29,12 @@ struct Peek: Identifiable, Equatable {
     var emphasis: String?
     /// How the symbol or logo moves as the peek comes out.
     var motion: PeekMotion = .none
+    /// Orders peeks waiting for a turn. A must-see peek already on screen keeps its time.
+    var priority: PeekPriority = .normal
+}
+
+enum PeekPriority: Int {
+    case normal, request, system
 }
 
 extension Peek {

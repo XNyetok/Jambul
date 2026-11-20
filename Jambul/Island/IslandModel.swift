@@ -20,6 +20,15 @@ enum PointerRegion: Hashable {
     case notch, island
 }
 
+/// The session glyph that was beside the notch when opening began.
+struct SessionGlyphFlight {
+    let glyph: String
+    let slotID: String
+    let view: AnyView
+    let leadingWidth: CGFloat
+    let trailingWidth: CGFloat
+}
+
 /// The island's state machine. Views are a pure function of it; its windows only follow along, through
 /// `onPresentationChange` and `onWillChange`.
 ///
@@ -42,6 +51,7 @@ final class IslandModel {
     /// both animate as one.
     private(set) var liveActivities: [any IslandActivity]
     private(set) var peek: Peek?
+    private(set) var sessionGlyphFlight: SessionGlyphFlight?
     /// With more than two live, the one of those past the first that shows left of the notch now: they take turns
     /// there. Kept by its id, so it stays as others start, end or change places; nil shows the second.
     private(set) var compactTurnHolder: String?
@@ -138,6 +148,7 @@ final class IslandModel {
         activities.onLiveActivityChange = { [weak self] in self?.liveActivityDidChange() }
         activities.onPeek = { [weak self] in self?.show($0) }
         activities.onWithdrawPeeks = { [weak self] in self?.withdrawPeeks(from: $0, topic: $1) }
+        activities.onResolvePeek = { [weak self] in self?.resolvePeek(from: $0, topic: $1) }
         updateTurns()
     }
 
@@ -209,6 +220,7 @@ final class IslandModel {
             tabArrivesFrom = next > current ? .trailing : .leading
             selectedTab = id
         }
+        clearVisibleSessionRequests()
     }
 
     func pointer(_ region: PointerRegion, isInside: Bool) {
@@ -279,6 +291,7 @@ final class IslandModel {
             return
         }
         guard !isHidden || peek.mustBeSeen else { return }
+        if presentation == .expanded, peek.priority == .request, sessionRequestIsVisible(peek) { return }
         if presentation == .peek, let showing = self.peek, showing.mustBeSeen, !showing.isSameNews(as: peek) {
             // Never cut short a peek the owner must see: this one follows it.
             line(up: peek, until: peek.mustBeSeen ? nil : max(peekEnds ?? .now, .now) + peek.duration)
@@ -294,7 +307,7 @@ final class IslandModel {
             // seen there and only keeps for its own time; other news the owner must see waits as long as it takes.
             // Open, the island shows one tab, so a live activity on another tab hasn't been seen.
             let isAboutWhatShows = presentation == .expanded
-                ? selectedTab == peek.source
+                ? (peek.priority == .request ? sessionRequestIsVisible(peek) : selectedTab == peek.source)
                 : liveActivities.contains { $0.id == peek.source }
             line(up: peek, until: peek.mustBeSeen && !isAboutWhatShows ? nil : .now + peek.duration,
                  seenOnItsTab: presentation == .expanded && isAboutWhatShows)
@@ -306,6 +319,22 @@ final class IslandModel {
     /// Drops the peeks from `source` still waiting, or only those about `topic`; one showing stays for its time.
     func withdrawPeeks(from source: String, topic: String? = nil) {
         waiting.removeAll { $0.peek.source == source && (topic == nil || $0.peek.topic == topic) }
+    }
+
+    private func resolvePeek(from source: String, topic: String) {
+        guard presentation == .peek, let peek, peek.priority == .request,
+              peek.source == source, peek.topic == topic else { return }
+        if expandTask == nil { settle() }
+    }
+
+    private func sessionRequestIsVisible(_ peek: Peek) -> Bool {
+        guard selectedTab == peek.source, let topic = peek.topic,
+              let agent = center.activities.first(where: { $0.id == peek.source }) as? AgentActivity else { return false }
+        return agent.visibleSessions(in: agent.shownSessions).contains { $0.id == topic }
+    }
+
+    private func clearVisibleSessionRequests() {
+        waiting.removeAll { $0.peek.priority == .request && sessionRequestIsVisible($0.peek) }
     }
 
     /// Shows the next waiting peek if someone can see the island now and it is at rest. Called whenever that may have
@@ -378,7 +407,9 @@ final class IslandModel {
     /// it waits as long as it takes.
     private func line(up peek: Peek, until: ContinuousClock.Instant?, seenOnItsTab: Bool = false) {
         let entry = WaitingPeek(peek: peek, until: until, seenOnItsTab: seenOnItsTab)
-        if peek.mustBeSeen, let firstOther = waiting.firstIndex(where: { !$0.peek.mustBeSeen }) {
+        if peek.mustBeSeen, let firstOther = waiting.firstIndex(where: {
+            !$0.peek.mustBeSeen || $0.peek.priority.rawValue < peek.priority.rawValue
+        }) {
             waiting.insert(entry, at: firstOther)
         } else {
             waiting.append(entry)
@@ -472,6 +503,7 @@ final class IslandModel {
     /// settle it anyway.
     private func settle() {
         let isClosing = presentation != .peek
+        if presentation == .expanded { clearVisibleSessionRequests() }
         if canBeSeen(), let next = nextWaitingPeek() {
             if isClosing { giveWaitingPeeksTheirTurn(after: next) }
             presentPeek(next)
@@ -543,26 +575,44 @@ final class IslandModel {
         }
         onWillChange?(next)
         let opening = next == .expanded && presentation != .expanded
+        let sessionFlight = opening ? captureSessionGlyph() : nil
         withAnimation(Motion.animation(from: presentation, to: next)) {
             // At rest or open, the island no longer keeps room for the pointer.
             if next != .lifted && next != .peek { (heldSlotWidth, heldLeadingWidth) = (nil, nil) }
             changes()
             // Opening on the tab it showed last, or the first time on the first.
-            if opening { selectedTab = tabOnOpening }
+            if opening {
+                sessionGlyphFlight = sessionFlight
+                selectedTab = tabOnOpening
+            } else if next != .expanded {
+                sessionGlyphFlight = nil
+            }
             presentation = next
         }
         if opening {
             if let selectedTab { Logger.island.notice("opened on the \(selectedTab, privacy: .public) tab") }
+            clearVisibleSessionRequests()
             // Open, the island shows one tab. News the owner must see about anything else hasn't been seen, so it waits
             // as long as it takes, even if it lined up while the hover was about to open the island, when all that was
             // live still showed beside the notch. News the owner saw on its own tab before stays seen.
             waiting = waiting.map { entry in
-                guard entry.peek.mustBeSeen, !entry.seenOnItsTab, entry.peek.source != selectedTab else { return entry }
+                let isAboutOtherContent = entry.peek.priority == .request || entry.peek.source != selectedTab
+                guard entry.peek.mustBeSeen, !entry.seenOnItsTab, isAboutOtherContent else { return entry }
                 return WaitingPeek(peek: entry.peek, until: nil)
             }
         }
         // Hidden for a full-screen app, the island is only on screen while it is out.
         updateVisibility()
+    }
+
+    private func captureSessionGlyph() -> SessionGlyphFlight? {
+        guard presentation == .compact || presentation == .lifted else { return nil }
+        let compact = compactActivities
+        guard let agent = compact.last as? AgentActivity, let glyph = agent.compactGlyph,
+              let leadingWidth = compactLeadingWidth, let trailingWidth = compactSlotWidth else { return nil }
+        return SessionGlyphFlight(glyph: glyph, slotID: CompactContent.leadingID(of: compact),
+                                  view: AnyView(agent.compactLeading), leadingWidth: leadingWidth,
+                                  trailingWidth: trailingWidth)
     }
 }
 

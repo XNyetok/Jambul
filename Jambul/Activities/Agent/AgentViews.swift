@@ -1,9 +1,9 @@
 import SwiftUI
 
 extension AgentActivity {
-    /// Claude's logo, still.
+    /// A single group beside the notch, with the provider of its most pressing session.
     var compactLeading: some View {
-        UsageLogo(provider: .claude, size: IslandLayout.compactGlyphHeight)
+        AgentCompactGlyph(session: liveSession, count: activeCount)
     }
 
     /// How long the turn has run, or a raised hand while it waits on the owner.
@@ -15,21 +15,48 @@ extension AgentActivity {
     var homeCard: some View { AgentHomeCard(activity: self) }
 }
 
+struct AgentCompactGlyph: View {
+    let session: AgentSession?
+    let count: Int
+
+    var body: some View {
+        if let session {
+            HStack(spacing: 3) {
+                if session.needsYou {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: IslandLayout.compactGlyphHeight)
+                } else {
+                    UsageLogo(provider: session.provider, size: IslandLayout.compactGlyphHeight)
+                }
+                if !session.needsYou, count > 1 {
+                    Text("+\(min(count - 1, 99))").font(.system(size: 10, weight: .semibold))
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("\(count) active coding sessions"))
+        }
+    }
+}
+
 private struct AgentCompactValue: View {
     let activity: AgentActivity
     @Environment(\.islandIsVisible) private var isVisible
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var raised = 0
-
     var body: some View {
         if let session = activity.liveSession {
-            if session.needsYou {
-                // The hand bounces once as it comes up, and then holds still.
-                Image(systemName: "hand.raised.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.yellow)
-                    .symbolEffect(.bounce, options: .nonRepeating, value: raised)
-                    .onAppear { if !reduceMotion { raised += 1 } }
+            if case .needsYou(let question) = session.state {
+                HStack(spacing: 4) {
+                    UsageLogo(provider: session.provider, size: 14)
+                    Image(systemName: question ? "questionmark.bubble.fill" : "hand.raised.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.yellow)
+                    if activity.activeCount > 1 {
+                        Text("+\(min(activity.activeCount - 1, 99))")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("\(session.provider.sessionName) needs you"))
             } else if let started = session.turnStartedAt {
                 // Once a minute, and only while someone can see it. A second past each whole minute, so the minute
                 // rounded up has turned over.
@@ -81,7 +108,7 @@ struct AgentStatusCircle: View {
         case .needsYou(let isQuestion): isQuestion ? 1 : 2
         case .done: 3
         case .failed: 4
-        case .stopped, .ready: 5
+        case .stopped, .ready, .unavailable: 5
         }
     }
 
@@ -103,7 +130,7 @@ struct AgentStatusCircle: View {
             case .failed:
                 Circle().fill(.red)
                 symbol("exclamationmark")
-            case .stopped, .ready:
+            case .stopped, .ready, .unavailable:
                 Circle().stroke(.white.opacity(0.3), lineWidth: 2)
             }
         }
@@ -136,6 +163,8 @@ struct AgentStatusLine: View {
             return String(localized: "working · \(AgentActivity.runningFor(date.timeIntervalSince(since)))")
         case .needsYou(let isQuestion):
             return isQuestion ? String(localized: "asks you") : String(localized: "needs you")
+        case .unavailable:
+            return String(localized: "status unavailable")
         case .done, .failed, .stopped, .ready:
             let word = switch session.state {
             case .done: String(localized: "done")
@@ -154,53 +183,67 @@ struct AgentStatusLine: View {
 struct AgentTab: View {
     let activity: AgentActivity
     /// Below the MacBook Air's notch, two rows fit with room for a line saying how many more there are.
-    static let rowsShown = 2
+    static let rowsShown = AgentActivity.rowsPerPage
 
     var body: some View {
         let sessions = activity.shownSessions
+        let lastPage = max(0, (sessions.count - 1) / Self.rowsShown)
+        let shownPage = min(activity.sessionPage, lastPage)
         Group {
             if !activity.isConnected {
                 HStack(spacing: 12) {
-                    Text(activity.problem ?? String(localized: "See your Claude Code sessions here"))
+                    Text(String(localized: "See your coding sessions here"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
                     Button("Connect") { activity.onConnect?() }
                         .buttonStyle(.islandProminent(tint: activity.tint))
                 }
             } else if sessions.isEmpty {
-                Text(activity.problem ?? String(localized: "No Claude Code sessions yet"))
+                Text(String(localized: "No coding sessions yet"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(sessions.prefix(Self.rowsShown)) { session in
-                        AgentRow(session: session, tint: activity.tint) { activity.openTerminal(for: session) }
+                    ForEach(activity.visibleSessions(in: sessions)) { session in
+                        AgentRow(session: session) { activity.openTerminal(for: session) }
                     }
-                    if sessions.count > Self.rowsShown {
-                        Text("+\(sessions.count - Self.rowsShown) more")
+                    if lastPage > 0 {
+                        HStack(spacing: 6) {
+                            if shownPage > 0 {
+                                Button("Previous", systemImage: "chevron.left") { activity.sessionPage = shownPage - 1 }
+                                    .labelStyle(.iconOnly)
+                                Text("\(shownPage + 1) / \(lastPage + 1)")
+                                    .monospacedDigit()
+                            }
+                            if shownPage < lastPage {
+                                Button(shownPage == 0 ? String(localized: "+\(sessions.count - Self.rowsShown) more")
+                                       : String(localized: "Next")) { activity.sessionPage = shownPage + 1 }
+                            }
+                        }
+                            .buttonStyle(.plain)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
                             .padding(.leading, 38)
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity)
-        .animation(Motion.tabStateChange, value: sessions)
+        .animation(Motion.tabStateChange, value: sessions.map(\.id))
+        .animation(Motion.tabStateChange, value: shownPage)
     }
 }
 
 private struct AgentRow: View {
     let session: AgentSession
-    let tint: Color
     let openTerminal: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            AgentStatusCircle(state: session.state, tint: tint)
+            AgentStatusCircle(state: session.state, tint: session.provider.brandColor)
                 .islandGlyph(AgentActivity.glyph(of: session))
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    UsageLogo(provider: session.provider, size: 12)
                     Text(session.project)
                         .font(.system(size: 13, weight: .semibold))
                         .layoutPriority(1)
@@ -224,19 +267,21 @@ private struct AgentRow: View {
                 }
             }
             .lineLimit(1)
-            Button(action: openTerminal) {
-                Image(systemName: "terminal.fill")
+            if session.terminal != nil || session.provider == .claude {
+                Button(action: openTerminal) {
+                    Image(systemName: "arrow.up.forward.app")
+                }
+                .buttonStyle(.islandIcon())
+                .accessibilityLabel(Text("Open session app"))
             }
-            .buttonStyle(.islandIcon())
-            .accessibilityLabel(Text("Open Terminal"))
         }
     }
 
     /// What it is doing, or what it said or what went wrong once the turn ended.
     private var detail: String {
         switch session.state {
-        case .working, .needsYou: session.step ?? String(localized: "Thinking")
-        default: session.reply ?? session.step ?? ""
+        case .working, .needsYou: session.step ?? session.provider.sessionName
+        default: session.reply ?? session.step ?? session.provider.sessionName
         }
     }
 }
@@ -248,11 +293,16 @@ private struct AgentHomeCard: View {
 
     var body: some View {
         if let session = activity.shownSessions.first {
-            HomeCardContent(Text(session.project)) {
-                AgentStatusCircle(state: session.state, tint: activity.tint, size: 15)
+            HomeCardContent(Text("Sessions")) {
+                AgentStatusCircle(state: session.state, tint: session.provider.brandColor, size: 15)
                     .islandGlyph(AgentActivity.glyph(of: session))
             } value: {
-                value(session)
+                if activity.activeCount > 1 {
+                    Text("\(activity.activeCount) active")
+                        .foregroundStyle(session.needsYou ? .yellow : .white)
+                } else {
+                    value(session)
+                }
             }
         }
     }
@@ -276,6 +326,9 @@ private struct AgentHomeCard: View {
         case .failed:
             Text("Failed")
                 .foregroundStyle(.red)
+        case .unavailable:
+            Text("Unknown")
+                .foregroundStyle(.secondary)
         case .stopped, .ready:
             Text("Stopped")
                 .foregroundStyle(.secondary)

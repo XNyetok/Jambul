@@ -185,6 +185,7 @@ final class AntigravityUsageSource {
             environment["BROWSER"] = bin.appending(path: "open").path
             environment["PATH"] = [bin.path, agy.deletingLastPathComponent().path, "/usr/bin", "/bin", "/usr/sbin",
                                    "/sbin"].joined(separator: ":")
+            environment[SessionRelay.internalRun] = "1"
             process.environment = environment
             // Into a file rather than a pipe: a child agy leaves behind can't hold the reading open.
             let outputURL = folder.appending(path: "usage.json")
