@@ -1,28 +1,12 @@
 import SwiftUI
 
 extension UsageActivity {
-    /// The logo of the subscription nearest its limit.
-    var compactLeading: some View { UsageCompactLogo(activity: self) }
-    /// Its percentage, or once it has run out, the time until it starts over.
-    var compactTrailing: some View { UsageCompactValue(activity: self) }
-    var compactMinimal: AnyView { AnyView(UsageCompactLogo(activity: self)) }
+    var compactLeading: some View { EmptyView() }
+    var compactTrailing: some View { EmptyView() }
     var tab: some View { UsageTab(activity: self) }
     var homeCard: some View { UsageHomeCard(activity: self) }
     /// Nothing to sum up with every subscription turned off.
     var showsHomeCard: Bool { !enabled.isEmpty }
-
-    /// The time left until a limit starts over, short enough for beside the notch: "45m", "9h59", "12h", "1d6h", "20d".
-    /// Each unit is rounded up, as a wait is.
-    static func countdown(_ remaining: TimeInterval) -> String {
-        let minutes = Int((max(remaining, 0) / 60).rounded(.up))
-        if minutes < 60 { return "\(minutes)m" }
-        if minutes < 10 * 60 { return "\(minutes / 60)h\(String(format: "%02d", minutes % 60))" }
-        let hours = Int((Double(minutes) / 60).rounded(.up))
-        if hours < 24 { return "\(hours)h" }
-        let days = hours / 24, rest = hours % 24
-        if days < 10 { return rest > 0 ? "\(days)d\(rest)h" : "\(days)d" }
-        return "\(Int((Double(hours) / 24).rounded(.up)))d"
-    }
 
     /// The color of a bar or a number: the subscription's own while there is room, then yellow, then red.
     static func color(for used: Double, provider: UsageProvider) -> Color {
@@ -49,52 +33,6 @@ struct UsageLogo: View {
     }
 }
 
-private struct UsageCompactLogo: View {
-    let activity: UsageActivity
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var beat = 0
-
-    var body: some View {
-        if let provider = activity.pressing?.provider {
-            UsageLogo(provider: provider, size: IslandLayout.compactGlyphHeight)
-                .phaseAnimator(reduceMotion ? [1] : Motion.Usage.pulseScales, trigger: beat) { content, scale in
-                    content.scaleEffect(scale)
-                } animation: { _ in Motion.Usage.beat }
-                .onAppear { beat += 1 }
-        }
-    }
-}
-
-private struct UsageCompactValue: View {
-    let activity: UsageActivity
-    @Environment(\.islandIsVisible) private var isVisible
-
-    var body: some View {
-        if let window = activity.pressing?.window {
-            if window.used >= 1, let resetsAt = window.resetsAt {
-                // Once a minute, and only while someone can see it.
-                TimelineView(.periodic(from: .now, by: isVisible ? 60 : 3_600)) { context in
-                    label(UsageActivity.countdown(resetsAt.timeIntervalSince(context.date)))
-                }
-            } else {
-                // Only the percentage rolls: the countdown changes by itself each minute, for hours.
-                label(UsageActivity.percentText(window.used))
-                    .contentTransition(Motion.numberTransition(value: window.used))
-                    .animation(Motion.valueChange, value: window.used)
-            }
-        }
-    }
-
-    private func label(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.red)
-            .monospacedDigit()
-            .lineLimit(1)
-            .fixedSize()
-    }
-}
-
 /// The usage limits' card on Home: each subscription the owner turned on, with its logo and its fullest limit, yellow
 /// from 80% and red from 95% as on the tab. Three leave no room for the card's name, which gives way to them, as the
 /// tab's large numbers do. Like the tab, it asks for numbers that are old as it appears.
@@ -109,7 +47,6 @@ private struct UsageHomeCard: View {
                 ForEach(providers, id: \.self) { provider in
                     HStack(spacing: 6) {
                         UsageLogo(provider: provider, size: 14)
-                            .islandGlyph(UsageActivity.glyph(of: provider))
                         percent(provider, now: now)
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .monospacedDigit()
@@ -248,7 +185,6 @@ private struct UsageColumn: View {
             .rotationEffect(.degrees(logoTurn))
             .scaleEffect(appeared || reduceMotion ? 1 : Motion.Usage.popScale)
             .opacity(appeared ? 1 : 0)
-            .islandGlyph(UsageActivity.glyph(of: provider))
     }
 
     private var logoTurn: Double {

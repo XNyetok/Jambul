@@ -37,23 +37,17 @@ struct UsageActivityTests {
         ], measuredAt: clock.now)
     }
 
-    @Test func comesBesideTheNotchFrom95Percent() {
+    @Test func neverRestsBesideTheNotchEvenWhenRed() {
         let usage = makeUsage()
-        usage.record(claude(0.94))
-        #expect(!usage.isLive)
         usage.record(claude(0.95))
-        #expect(usage.isLive)
-        #expect(usage.pressing?.provider == .claude)
-        #expect(usage.pressing?.window.id == "five_hour")
-    }
-
-    @Test func leavesOnceTheLimitStartsOver() {
-        let usage = makeUsage()
+        #expect(!usage.isLive)
+        #expect(usage.tabTint == .red)
         usage.record(claude(1, resetsIn: 60))
-        #expect(usage.isLive)
+        #expect(!usage.isLive)
         clock.now = clock.now.addingTimeInterval(61)
         usage.checkResets()
         #expect(!usage.isLive)
+        #expect(usage.tabTint == nil)
     }
 
     @Test func aSubscriptionTurnedOffCountsForNothing() {
@@ -142,10 +136,8 @@ struct UsageActivityTests {
         let usage = makeUsage()
         usage.record(claude(0.97))
         usage.peekWasShown(try #require(log.peeks.last))
-        #expect(usage.isLive)
         usage.record(claude(0.13))
         #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
-        #expect(!usage.isLive)
         // Two sessions at work still don't flicker, whatever the rounding.
         usage.record(claude(0.11))
         #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
@@ -249,16 +241,10 @@ struct UsageActivityTests {
 
         let after = makeUsage(defaults: defaults)
         #expect(after.readings[.claude]?.windows.first?.used == 0.96)
-        #expect(after.isLive)
+        #expect(!after.isLive)
+        #expect(after.tabTint == .red)
         after.record(claude(0.97))
         #expect(log.peeks.count == count)
-    }
-
-    /// Each fits the 36 pt beside the notch at 13 pt (measured: "100%" 38 pt and "23h59" 42 pt don't).
-    @Test(arguments: [(4_800, "1h20"), (2_700, "45m"), (59, "1m"), (-5, "0m"), (7_200, "2h00"), (41_400, "12h"),
-                      (108_000, "1d6h"), (259_200, "3d"), (604_740, "7d"), (1_728_000, "20d")] as [(TimeInterval, String)])
-    func theCountdownFitsBesideTheNotch(remaining: TimeInterval, text: String) {
-        #expect(UsageActivity.countdown(remaining) == text)
     }
 
     @Test func aPercentageNeverReads100BeforeTheLimitRunsOut() {
