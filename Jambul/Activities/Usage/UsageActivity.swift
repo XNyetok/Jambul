@@ -1,16 +1,14 @@
 import os
 import SwiftUI
 
-/// The usage limits of the owner's AI subscriptions: a tab with each one, peeks at 80% and 95%, and a place beside the
-/// notch from 95% until the limit starts over.
+/// The usage limits of the owner's AI subscriptions: a tab with each one, and peeks at 80% and 95%, at 100% and when
+/// a limit resets. It never rests beside the notch.
 ///
 /// It only holds what the sources hand it and the time each limit starts over; nothing here runs on a timer, except a
 /// single wait for the next limit to start over.
 @MainActor
 @Observable
 final class UsageActivity: IslandActivity {
-    /// Beside the notch from here.
-    static let liveFrom = 0.95
     static let warningPeekDuration: Duration = .seconds(3)
     /// The must-see ones, as long as a low battery's.
     static let urgentPeekDuration = BatteryActivity.lowPeekDuration
@@ -20,6 +18,7 @@ final class UsageActivity: IslandActivity {
     static let flickerPoints = 2.0
 
     let id = "usage"
+    var isLive: Bool { false }
     var title: String { String(localized: "Usage") }
     var tabSymbol: String { "gauge.with.needle.fill" }
     /// Yellow from 80% and red from 95%, like the numbers on the tab.
@@ -28,13 +27,6 @@ final class UsageActivity: IslandActivity {
         let fullest = enabled.compactMap { readings[$0]?.fullest(at: now)?.used(at: now) }.max() ?? 0
         return fullest >= 0.95 ? .red : fullest >= 0.8 ? .yellow : nil
     }
-    var priority: ActivityPriority { .low }
-    /// Its logo.
-    var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight }
-    /// The logo of the subscription nearest its limit, which the tab and the card on Home show too.
-    var compactGlyph: String? { (pressing?.provider).map(Self.glyph) }
-
-    static func glyph(of provider: UsageProvider) -> String { "usage.\(provider.rawValue)" }
 
     /// The subscriptions the owner turned on, in the order the tab shows them.
     var enabled: [UsageProvider] = [] {
@@ -89,17 +81,6 @@ final class UsageActivity: IslandActivity {
            let saved = try? JSONDecoder().decode(UsageAlerts.self, from: data) {
             alerts = saved
         }
-    }
-
-    var isLive: Bool { pressing != nil }
-
-    /// The subscription and window nearest their limit, once at 95% or past it.
-    var pressing: (provider: UsageProvider, window: UsageWindow)? {
-        _ = resetCount
-        let now = now()
-        return enabled.compactMap { provider in readings[provider]?.fullest(at: now).map { (provider, $0) } }
-            .filter { $0.1.used(at: now) >= Self.liveFrom }
-            .max { $0.1.used(at: now) < $1.1.used(at: now) }
     }
 
     /// Whether Claude Code is working now, as far as its status line tells.

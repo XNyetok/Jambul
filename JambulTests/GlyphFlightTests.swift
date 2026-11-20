@@ -147,17 +147,6 @@ final class GlyphFlightTests {
         #expect(try await glyphsShown(by: keepAwake.homeCard).contains(glyph))
     }
 
-    @Test func theLogoOfTheSubscriptionNearestItsLimitHasAPlaceOnTheUsageTabAndItsCard() async throws {
-        let usage = UsageActivity(activities: activities)
-        usage.enabled = [.claude]
-        usage.record(UsageReading(provider: .claude, windows: [
-            UsageWindow(id: "five_hour", label: "5h", used: 0.96, resetsAt: .now.addingTimeInterval(3_600))],
-                                  measuredAt: .now))
-        let glyph = try #require(usage.compactGlyph)
-        #expect(try await glyphsShown(by: usage.tab).contains(glyph))
-        #expect(try await glyphsShown(by: usage.homeCard).contains(glyph))
-    }
-
     @Test func aWorkingSessionsCircleIsWhereClaudesLogoTravels() async throws {
         let agent = AgentActivity(activities: activities)
         agent.connectedProviders = [.claude]

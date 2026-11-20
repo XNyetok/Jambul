@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Changed
+- High AI usage no longer stays beside the notch; Jambul still warns with peeks at 80%, 95%, 100% and reset.
+
 ### Fixed
 - Claude usage limits no longer flicker down when one concurrent session finishes a long request with older numbers.
 - Claude Code sessions no longer flicker out of "Needs you" while parallel subagents keep running tools.
