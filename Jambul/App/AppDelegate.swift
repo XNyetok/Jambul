@@ -206,11 +206,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startUsageSocket() {
         guard usageSocket == nil else { return }
         let socket = InputSocket(path: claudeStatusLine.socketPath) { [usage] input in
-            let isCurrent = UsageParsing.claudeRequestTime(fromStatusLine: input).map {
+            let request = UsageParsing.claudeRequestTime(fromStatusLine: input)
+            let isCurrent = request.map {
                 usage.noteClaudeRequestTime($0.milliseconds, session: $0.session)
             } ?? false
             guard let windows = UsageParsing.claudeWindows(fromStatusLine: input) else { return }
-            usage.record(UsageReading(provider: .claude, windows: windows, measuredAt: .now), isCurrent: isCurrent)
+            usage.record(UsageReading(provider: .claude, windows: windows, measuredAt: .now),
+                         isCurrent: isCurrent, session: request?.session)
         }
         do {
             try socket.start()

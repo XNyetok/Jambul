@@ -4,6 +4,10 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed
+- Claude usage limits no longer flicker down when one concurrent session finishes a long request with older numbers.
+- Claude Code sessions no longer flicker out of "Needs you" while parallel subagents keep running tools.
+
 ## [0.6.0] - 2026-11-20
 See which coding sessions are working, waiting for you or done.
 
