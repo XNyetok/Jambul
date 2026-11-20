@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-20
+See which coding sessions are working, waiting for you or done.
+
 ### Added
 - Follow local Codex and Antigravity sessions alongside Claude Code in one Sessions tab. A single indicator counts active sessions, and Keep Awake can wait for all of them.
 
@@ -82,7 +85,8 @@ The first public release.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
 
-[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/XNyetok/Jambul/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/XNyetok/Jambul/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/XNyetok/Jambul/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/XNyetok/Jambul/compare/v0.3.0...v0.4.0
