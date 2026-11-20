@@ -132,7 +132,7 @@ final class KeepAwakeActivityTests {
         let since = Date(timeIntervalSinceReferenceDate: 0)
         for seconds in [30, 12 * 60] as [TimeInterval] {
             #expect(KeepAwakeActivity.detailLine(since: since, at: since + seconds, untilAgentsFinish: true)
-                    == "Until Claude Code finishes")
+                    == "Until sessions finish")
         }
         #expect(KeepAwakeActivity.headline(since: since, at: since + 12 * 60) == "12m")
     }

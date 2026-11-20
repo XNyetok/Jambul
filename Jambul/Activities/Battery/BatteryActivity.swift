@@ -134,7 +134,7 @@ final class BatteryActivity: IslandActivity {
                  detail: detail, source: id)
         case .low:
             Peek(symbol: Self.symbol(for: percent), tint: .red, title: String(localized: "Low battery"), detail: detail,
-                 duration: Self.lowPeekDuration, mustBeSeen: true, source: id)
+                 duration: Self.lowPeekDuration, mustBeSeen: true, source: id, priority: .system)
         }
         Logger.activities.notice("battery: \(peek.title, privacy: .public), \(percent, privacy: .public)%")
         activities?.peek(peek)

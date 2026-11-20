@@ -53,7 +53,7 @@ struct AgentActivityTests {
         let agent = AgentActivity(activities: activities, now: { [clock] in clock.now },
                                   frontmostApp: { [clock] in clock.frontmost },
                                   readTranscript: { [transcript] in transcript.read($0) },
-                                  quietCheck: quietCheck, quietRecheck: quietRecheck)
+                                  quietCheck: quietCheck, quietRecheck: quietRecheck, completionWindow: .zero)
         agent.onAllFinished = { [inbox] in inbox.finished += 1 }
         return agent
     }
@@ -238,8 +238,8 @@ struct AgentActivityTests {
         agent.receive(event(.prompt, session: "waiting"))
         agent.receive(event(.permission, session: "waiting", tool: "Bash"))
         agent.receive(event(.sessionStart, session: "fresh"))
-        #expect(agent.shownSessions.map(\.id) == ["waiting", "working", "done"])
-        #expect(agent.liveSession?.id == "waiting")
+        #expect(agent.shownSessions.map(\.id) == ["claude:waiting", "claude:working", "claude:done"])
+        #expect(agent.liveSession?.id == "claude:waiting")
     }
 
     /// Each session's news is its own: answering one session's request takes back only its peek.
@@ -249,10 +249,10 @@ struct AgentActivityTests {
         agent.receive(event(.permission, tool: "Bash"))
         agent.receive(event(.prompt, session: "s2"))
         agent.receive(event(.permission, session: "s2", tool: "Bash"))
-        #expect(inbox.peeks.map(\.topic) == ["s1", "s2"])
+        #expect(inbox.peeks.map(\.topic) == ["claude:s1", "claude:s2"])
         agent.receive(event(.toolRan(failed: false), session: "s2", tool: "Bash"))
-        #expect(inbox.withdrawnTopics == ["s2"])
-        #expect(agent.liveSession?.id == "s1")
+        #expect(inbox.withdrawnTopics == ["claude:s2"])
+        #expect(agent.liveSession?.id == "claude:s1")
     }
 
     /// Each hook hands over on its own, so the one before a request can arrive after it; the request still waits.
@@ -305,7 +305,7 @@ struct AgentActivityTests {
         agent.appActivated("com.apple.Safari")
         #expect(inbox.withdrawn == 0)
         agent.appActivated("com.apple.Terminal")
-        #expect(inbox.withdrawnTopics == ["s1"])
+        #expect(inbox.withdrawnTopics == ["claude:s1"])
         // It still waits until a hook says otherwise.
         #expect(agent.liveSession?.needsYou == true)
     }
@@ -327,7 +327,7 @@ struct AgentActivityTests {
         agent.receive(event(.stop))
         clock.now.addTimeInterval(AgentActivity.forgetAfter + 1)
         agent.receive(event(.prompt, session: "s2"))
-        #expect(agent.sessions.keys.sorted() == ["s2"])
+        #expect(agent.sessions.keys.sorted() == ["claude:s2"])
     }
 
     // MARK: Finishing, for Keep Awake

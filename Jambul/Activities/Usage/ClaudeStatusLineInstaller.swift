@@ -23,7 +23,7 @@ struct ClaudeStatusLineInstaller {
     /// What runs the owner's status line inside Jambul's; the older form, without the newline, came first.
     private static let openers = [#"printf '%s\n' "$IN" | ( "#, #"printf '%s' "$IN" | ( "#]
 
-    typealias Failure = ClaudeSettingsFile.Failure
+    typealias Failure = JSONSettingsFile.Failure
 
     /// The owner's status line as it was before Jambul's: whether there was one, and its value.
     private struct Saved: Codable {
@@ -31,7 +31,7 @@ struct ClaudeStatusLineInstaller {
         var value: JSONValue?
     }
 
-    private var settingsFile: ClaudeSettingsFile { ClaudeSettingsFile(url: settingsURL) }
+    private var settingsFile: JSONSettingsFile { JSONSettingsFile(url: settingsURL) }
 
     /// Whether Jambul's status line is in place.
     func isInstalled() -> Bool {

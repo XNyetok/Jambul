@@ -15,7 +15,7 @@ Jambul is a background app (no Dock icon) that draws a Dynamic Island–style is
 Hover opens the island after a short intent delay, leaving closes it, and a click toggles it. Closing by click folds the island back to its lifted pill while the pointer stays, and hover leaves it closed until the pointer goes away. The island never vanishes from under a resting pointer, and a click always visibly does something. There are no swipe gestures: they stalled once the island shrank away from the pointer.
 
 ## Activities
-- Features are `IslandActivity` conformers in `Activities/`, registered with `ActivityCenter` in `AppDelegate` (`registerJambulsActivities`). Today these are Home, the usage limits, Claude Code's sessions, Keep Awake, the timer and the battery, plus a demo activity in debug builds. The order they register in is the order of the tabs and of Home's cards.
+- Features are `IslandActivity` conformers in `Activities/`, registered with `ActivityCenter` in `AppDelegate` (`registerJambulsActivities`). Today these are Home, the usage limits, coding sessions, Keep Awake, the timer and the battery, plus a demo activity in debug builds. The order they register in is the order of the tabs and of Home's cards.
 - The most important live activity keeps the right of the compact island, and one other shows its `compactMinimal` glyph on the left. With more than two live, the others take turns there every few seconds (`IslandModel.compactTurnHolder`), only while the island rests beside the notch where someone can see it; the left slot is as wide as the widest of them, so the island keeps its size.
 - The open island shows one activity's `tab` at a time, with the tabs split between the two sides of the camera, the extra one on the left (`IslandLayout.tabSides`). Each side lines up with the edge of the content below it. An activity without one, like the battery or the debug demo, gets no tab. With more tabs than fit on a side at full width, each narrows to fit, and the island keeps its size (`IslandLayout.tabButtonWidth`).
 - Home (`HomeActivity`), registered first, is the first tab: one card for each activity with a `homeCard`, laid out by `HomeCardContent`. A click on a card opens that activity's tab. An activity can keep its card off Home while it has nothing to say (`showsHomeCard`), like the battery before its first reading.
@@ -48,15 +48,24 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 - One wait at a time, for the next limit to start over.
 - The logos are their owners' trademarks (see `THIRD_PARTY_NOTICES.md`). Every usage motion plays once, except Claude's logo while Claude Code works: it turns one ray on a 2 s beat, holding still in between, and only while the open island shows it. Claude Code also sends its status line on a timer, so "working" means a session's request time grew in the last 20 s.
 
-## Claude Code sessions
-- Once the owner agrees in Settings, `AgentHookInstaller` adds one command hook to each of ten events in `~/.claude/settings.json` (`ClaudeSettingsFile`, shared with the status line). Jambul knows its own by their `JAMBUL_AGENT=1` prefix and never touches anyone else's.
+## Coding sessions
+
+- `AgentActivity` keeps sessions in memory under a key made from the provider and the session ID. It owns one tab, one Home card and one compact activity. Unanswered requests lead the list in the order they arrived. The compact slot uses the same ordering and shows a count when several sessions are active. Opening captures the session glyph to keep its destination stable even if a new request arrives.
+- The per-client opt-in settings carry forward the previous Claude Code toggle. On disconnect, only that client's rows and pending requests are removed. Keep Awake counts active sessions across providers, including sessions waiting for an answer.
+- Codex lifecycle hooks and Antigravity lifecycle hooks and status line forward a small status record using the same Unix socket as Claude. The relay drops prompts, responses, tool arguments and account metadata before sending. It returns neutral hook output and preserves the owner's status line output. Jambul excludes its own Antigravity usage refresh.
+- `CodexSessionSource` reads status from the existing local daemon with `codex app-server proxy`. It matches status and terminal outcomes to the observed thread and turn. If a local rollout is available, it can recognize the same turn's terminal event after a file change. A bare `Stop` hook is provisional.
+- `AntigravitySessionSource` combines the lifecycle hooks with `agy` snapshots. Once the status line has reported for a session, Jambul waits for an idle snapshot to confirm its terminal hook. The confirmation flag in a snapshot is the source of a pending permission.
+- The notification queue gives timer completions and low-battery warnings precedence among waiting peeks. A response withdraws the corresponding request, and completions within a short window share a peek.
+
+### Claude Code
+
+- Once the owner agrees in Settings, `AgentHookInstaller` adds one command hook to each of ten events in `~/.claude/settings.json` (`JSONSettingsFile`, shared with the status line). Jambul knows its own by their `JAMBUL_AGENT=1` prefix and preserves the user's other hooks.
 - Each hook pipes the app Claude Code runs in (`$__CFBundleIdentifier`) and the hook's input into a second `InputSocket` with `nc` in the background, and returns at once: about 10 ms per hook (measured). Like the status line, it names no path into Jambul.
 - An input past the socket's limit arrives cut to its start, where Claude Code puts the session and the hook's name (`AgentEvent`).
 - `AgentActivity` keeps each session in memory: working, waiting on the owner (a permission or a question), done, failed or stopped. It sits beside the notch while a session works, ahead of everything else while one waits on the owner.
 - Claude Code runs no hook when a turn is stopped with Esc. A session quiet mid-turn has the end of its transcript read a minute later, and every few minutes while it stays quiet; Esc leaves "[Request interrupted by user" there. A working session quiet in its hooks and its transcript for 20 minutes counts as stopped. A session waiting on the owner never goes stale.
-- "Needs you" must be seen, and is taken back while it waits (`ActivityCenter.withdrawPeeks`) once the request is answered in the terminal. "Done" stays quiet for a turn under a minute that the owner watched in its terminal, and while another session waits on the owner.
+- "Needs you" must be seen and is taken back once the request is answered in the terminal. "Done" stays quiet for a turn under a minute that the owner watched in its terminal, and queues behind peeks that must be seen.
 - In the open island a working session's ring turns a step every 2 s, on the beat Claude's logo steps on (`Motion.Usage.untilNextBeat`).
-- Keep Awake can stay on until the last working session finishes (`KeepAwakeActivity.agentsFinished`).
 - Nothing about sessions is saved; the log only records changes of state, never what an agent said or which files it touched.
 
 ## Sleep

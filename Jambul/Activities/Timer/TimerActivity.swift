@@ -208,7 +208,7 @@ final class TimerActivity: NSObject, IslandActivity {
         // The sound plays now; the peek waits for the owner if nobody can see the island.
         activities?.peek(Peek(symbol: "bell.fill", tint: .orange, title: String(localized: "Timer done"),
                               detail: Self.lengthText(length), duration: Self.donePeekDuration, mustBeSeen: true,
-                              source: id, motion: .ring))
+                              source: id, motion: .ring, priority: .system))
         onFinish()
     }
 

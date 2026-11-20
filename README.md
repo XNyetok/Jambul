@@ -8,13 +8,13 @@ Jambul turns the notch into a living island. Hover over it to open it, move away
 
 ## Features
 - **Timer:** start 1 to 60 minutes from round buttons in the island; the one under the pointer shows on a dial with when it would end. A small dial and the time left rest beside the notch; open the island to add a minute, pause or cancel. When it ends you get a peek, a sound and a tap on the trackpad. If the Mac was asleep, the timer ends once it fully wakes; if the screen was locked, the peek waits until you unlock it.
-- **Keep Awake:** keeps the display on until you turn it off, for long downloads, builds or coding agents. A pair of eyes opens, blinks and falls asleep with it, and how long it has been on shows beside the notch. It turns itself off at 20% battery, and while Claude Code works it can stay on only until it finishes.
+- **Keep Awake:** keeps the display on until you turn it off, for long downloads, builds or coding agents. A pair of eyes opens, blinks and falls asleep with it, and how long it has been on shows beside the notch. It turns itself off at 20% battery or, when you choose Until Done, once the monitored coding sessions finish.
 - **Battery:** peeks when the charger is plugged in or out and when the battery is full, plus low-battery warnings at 20% and 5% that wait until you can see them.
 - **Usage limits:** how much of your Claude, Antigravity and Codex limits you've used and when they start over, each with its own logo. Peeks warn at 80% and 95%, the island stays beside the notch from 95% until the limit resets, and a peek tells you when it's back. Each subscription can be turned on or off in Settings; Codex starts off.
-- **Claude Code sessions:** which sessions work, wait for you or are done, with what each is doing and how long its turn has run. A peek tells you when a session needs your permission or an answer, when a turn ends (unless you watched a short one in its terminal), and when it stops on an error. Turned on in Settings.
-- **Home and tabs:** the open island shows one feature at a time. As Jambul starts it opens on Home, with a card for your usage limits, Claude Code's sessions, Keep Awake, the timer and the battery; click a card to open its tab. After that it opens on the tab you looked at last.
+- **Coding sessions.** Follow Claude Code, Codex and Antigravity in one Sessions tab and one indicator beside the notch. Peeks show confirmed requests for your attention and how turns end. Enable each client in Settings. For Codex, review Jambul's hooks in `/hooks` and start or reopen a local session. Codex needs a reachable shared App Server for live approval and question status. Reopen `agy` to load its hooks and status line.
+- **Home and tabs:** the open island shows one feature at a time. As Jambul starts it opens on Home, with a card for your usage limits, coding sessions, Keep Awake, the timer and the battery; click a card to open its tab. After that it opens on the tab you looked at last.
 - **Full screen friendly:** the island never covers a full-screen app, and shows the day and time while the menu bar is hidden. It can also hide completely in full screen.
-- **Settings:** open at login, hover speed, haptic taps, the timer's sound, Claude Code's sessions, and which usage limits to show. Reduce Motion is respected.
+- **Settings:** open at login, hover speed, haptic taps, the timer's sound, coding sessions, and which usage limits to show. Reduce Motion is respected.
 
 ## Requirements
 - macOS 27 or later.
@@ -42,6 +42,8 @@ cd Jambul
 Jambul makes no network connections and collects no data. Its settings stay in its preferences on your Mac. To tell full-screen spaces apart it reads SkyLight, a private macOS framework, at runtime; if that ever stops working, Jambul treats every space as a regular desktop instead of failing.
 
 For Claude Code's sessions, once you agree in Settings, Jambul adds hooks to `~/.claude/settings.json`, keeping a copy of the original and leaving your other hooks as they are. Each hook hands what Claude Code tells it to Jambul over a socket only your account can open, and returns at once. When a session goes quiet in the middle of a turn, Jambul reads the end of its transcript to see whether you stopped it. Turning the sessions off takes Jambul's hooks out again.
+
+For Codex and Antigravity, Jambul's hooks relay session identifiers and status metadata over the same local socket. Codex's hooks live in `$CODEX_HOME/hooks.json` (`~/.codex/hooks.json` by default). Jambul reads status from the shared local Codex App Server when it is reachable, or reads turn markers from a session's local rollout when available. Antigravity's hooks live in `~/.gemini/config/hooks.json`. Jambul joins the `agy` status line to see when its confirmation dialog is open and preserves the user's status line output. Turning either client off removes Jambul's hooks and restores the status line it joined.
 
 Jambul gets usage limits from the tools on your Mac.
 - **Claude:** once you agree in Settings, Jambul adds itself to Claude Code's status line in `~/.claude/settings.json`, keeping a copy of the original. Your status line looks the same; it also hands its input to Jambul over a socket only your account can open. Turning Claude off puts your status line back exactly.

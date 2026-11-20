@@ -107,9 +107,9 @@ struct AgentHookInstallerTests {
 
     @Test func settingsItCantReadAreLeftAlone() throws {
         try writeSettings("{not json")
-        #expect(throws: ClaudeSettingsFile.Failure.unreadableSettings) { try installer.install() }
+        #expect(throws: JSONSettingsFile.Failure.unreadableSettings) { try installer.install() }
         try writeSettings(#"{"hooks":[]}"#)
-        #expect(throws: ClaudeSettingsFile.Failure.unreadableSettings) { try installer.install() }
+        #expect(throws: JSONSettingsFile.Failure.unreadableSettings) { try installer.install() }
         #expect(try String(contentsOf: installer.settingsURL, encoding: .utf8) == #"{"hooks":[]}"#)
     }
 

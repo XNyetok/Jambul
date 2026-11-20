@@ -28,10 +28,9 @@ final class KeepAwakeActivity: IslandActivity {
 
     /// When it was turned on; nil while off.
     private(set) var since: Date?
-    /// On only until Claude Code's sessions finish their turns, rather than until the owner turns it off.
+    /// On until the monitored coding sessions finish their turns.
     private(set) var untilAgentsFinish = false
-    /// Whether a Claude Code session is in a turn now, for offering to stay on until it finishes. Read inside views, so
-    /// they follow it.
+    /// Whether a monitored session is in a turn now. Views read it to offer Until Done.
     @ObservationIgnored var agentsAreWorking: @MainActor () -> Bool = { false }
     /// True for the moment the eyes take to close after it is turned off, before it leaves the island.
     private(set) var isClosing = false
@@ -41,7 +40,7 @@ final class KeepAwakeActivity: IslandActivity {
     /// On, as far as the owner is concerned: turned on and not yet turned off.
     var isOn: Bool { since != nil && !isClosing }
 
-    /// Closing its eyes as it turns itself off, for Claude Code having finished or the battery running low. Nobody
+    /// Closing its eyes as it turns itself off, for coding sessions finishing or the battery running low. Nobody
     /// clicked, so no double click is under way and a click may turn it straight back on.
     var isTurningItselfOff: Bool { isClosing && closing != .plain }
 
@@ -88,7 +87,7 @@ final class KeepAwakeActivity: IslandActivity {
         restore()
     }
 
-    /// - Parameter untilAgentsFinish: Turns off by itself once Claude Code's sessions finish their turns.
+    /// - Parameter untilAgentsFinish: Turns off by itself once the monitored coding sessions finish their turns.
     func start(untilAgentsFinish: Bool = false) {
         guard !isOn else { return }
         closeTask?.cancel()
@@ -184,7 +183,7 @@ final class KeepAwakeActivity: IslandActivity {
     /// it says for how long; on until Claude Code finishes, that instead.
     static func detailLine(since: Date, at date: Date, untilAgentsFinish: Bool = false,
                            locale: Locale = .autoupdatingCurrent) -> String {
-        if untilAgentsFinish { return String(localized: "Until Claude Code finishes") }
+        if untilAgentsFinish { return String(localized: "Until sessions finish") }
         let time = since.formatted(.dateTime.hour().minute().locale(locale))
         return date.timeIntervalSince(since) >= 60 ? String(localized: "Awake since \(time)")
             : String(localized: "Since \(time)")
