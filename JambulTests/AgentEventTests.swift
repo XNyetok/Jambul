@@ -12,17 +12,21 @@ struct AgentEventTests {
     }
 
     @Test func readsTheSessionItsProjectAndTheAppItRunsIn() throws {
-        let event = try #require(AgentEvent.parse(try input(["hook_event_name": "UserPromptSubmit", "prompt": "hi"])))
+        let event = try #require(AgentEvent.parse(try input([
+            "hook_event_name": "UserPromptSubmit", "prompt": "hi", "agent_id": "sub-1",
+        ])))
         #expect(event.kind == .prompt)
         #expect(event.session == "s1")
+        #expect(event.agentID == "sub-1")
         #expect(event.project == "Jambul")
         #expect(event.terminal == "com.apple.Terminal")
         #expect(event.transcriptPath == "/tmp/work/s1.jsonl")
     }
 
     @Test func anEmptyFirstLineMeansNoKnownApp() throws {
-        let event = try #require(AgentEvent.parse(try input(["hook_event_name": "Stop"], app: "")))
+        let event = try #require(AgentEvent.parse(try input(["hook_event_name": "Stop", "agent_id": ""], app: "")))
         #expect(event.terminal == nil)
+        #expect(event.agentID == nil)
     }
 
     @Test(arguments: [
@@ -96,12 +100,13 @@ struct AgentEventTests {
     /// An input past the socket's limit arrives cut short; what comes first still says which session did what.
     @Test func anInputCutShortStillNamesItsSessionAndHook() throws {
         let full = try input([
-            "hook_event_name": "PostToolUse", "tool_name": "Read",
+            "agent_id": "sub-1", "hook_event_name": "PostToolUse", "tool_name": "Read",
             "tool_response": String(repeating: "x", count: 10_000),
         ])
         let event = try #require(AgentEvent.parse(full.prefix(2_000)))
         #expect(event.kind == .toolRan(failed: false))
         #expect(event.session == "s1")
+        #expect(event.agentID == "sub-1")
         #expect(event.project == "Jambul")
         #expect(event.terminal == "com.apple.Terminal")
     }

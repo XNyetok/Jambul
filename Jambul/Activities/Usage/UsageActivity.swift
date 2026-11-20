@@ -50,6 +50,10 @@ final class UsageActivity: IslandActivity {
     private(set) var claudeWorkingAt: Date?
     /// The time each Claude Code session's requests have taken so far.
     @ObservationIgnored private var claudeRequestTime: [String: Double] = [:]
+    /// Which Claude Code session last set or confirmed each window's stored number.
+    @ObservationIgnored private var claudePeakSession: [String: String] = [:]
+    /// A same-window drop from another session, held until confirmed so concurrent turns don't flicker.
+    @ObservationIgnored private var claudePendingDrop: [String: (session: String, at: Date)] = [:]
     /// Moves on each time a limit starts over, so what depends on the clock is worked out again.
     private var resetCount = 0
 
@@ -119,12 +123,15 @@ final class UsageActivity: IslandActivity {
         return now()
     }
 
-    /// - Parameter isCurrent: Whether the numbers were just heard from the provider, as opposed to a Claude Code
-    ///   session repeating what it heard a while ago.
-    func record(_ newReading: UsageReading, isCurrent: Bool = true) {
+    /// - Parameters:
+    ///   - isCurrent: Whether the numbers were just heard from the provider, as opposed to a Claude Code session
+    ///     repeating what it heard a while ago.
+    ///   - session: Which Claude Code session sent the reading, when known.
+    func record(_ newReading: UsageReading, isCurrent: Bool = true, session: String? = nil) {
         let previous = readings[newReading.provider]
         if let previous, newReading.provider == .codex, newReading.measuredAt < previous.measuredAt { return }
-        let reading = Self.settled(newReading, after: previous, isCurrent: isCurrent)
+        let date = now()
+        let reading = settle(newReading, after: previous, isCurrent: isCurrent, session: session, at: date)
         if problems[reading.provider] != nil { problems[reading.provider] = nil }
         // Claude Code updates its status line many times a minute while it works, mostly with the same numbers; those
         // change nothing. Codex also tracks when it last confirmed its numbers.
@@ -153,6 +160,50 @@ final class UsageActivity: IslandActivity {
             }
         }
         scheduleNextReset()
+    }
+
+    /// Settles a Claude reading across concurrent sessions so one finishing a long request with older limits cannot
+    /// flicker the window down, while still accepting a genuine handback once confirmed.
+    private func settle(_ reading: UsageReading, after previous: UsageReading?, isCurrent: Bool, session: String?,
+                        at date: Date) -> UsageReading {
+        var settled = Self.settled(reading, after: previous, isCurrent: isCurrent)
+        guard settled.provider == .claude else { return settled }
+        settled.windows = settled.windows.map { window in
+            let old = previous?.windows.first(where: { $0.id == window.id })
+            let sameWindow = old?.resetsAt != nil && window.resetsAt != nil
+                && UsageAlerts.isSameWindow(old?.resetsAt, window.resetsAt)
+            if !sameWindow {
+                claudePendingDrop.removeValue(forKey: window.id)
+                claudePeakSession[window.id] = isCurrent ? session : nil
+                return window
+            }
+            guard isCurrent, let old else { return window }
+            if window.used >= old.used {
+                claudePendingDrop.removeValue(forKey: window.id)
+                if let session, window.used > old.used || claudePeakSession[window.id] == nil {
+                    claudePeakSession[window.id] = session
+                }
+                return window
+            }
+            guard let session, let peak = claudePeakSession[window.id], peak != session else {
+                claudePendingDrop.removeValue(forKey: window.id)
+                if let session { claudePeakSession[window.id] = session }
+                return window
+            }
+            if let pending = claudePendingDrop[window.id],
+               pending.session != session || date.timeIntervalSince(pending.at) >= Self.claudeWorkingFor {
+                claudePendingDrop.removeValue(forKey: window.id)
+                claudePeakSession[window.id] = session
+                return window
+            }
+            if claudePendingDrop[window.id]?.session != session {
+                claudePendingDrop[window.id] = (session, date)
+            }
+            var higher = window
+            higher.used = old.used
+            return higher
+        }
+        return settled
     }
 
     /// Settles a new reading against the last one, window by window.

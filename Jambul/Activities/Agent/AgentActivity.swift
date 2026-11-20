@@ -36,8 +36,9 @@ struct AgentSession: Equatable, Identifiable {
     var reply: String?
     var editedFiles: Set<String> = []
     var commands = 0
-    /// What it asked the owner about, while it waits on them.
-    var request: AgentRequest?
+    /// What it asked the owner about, per agent or subagent, while it waits on them.
+    var pendingRequests: [AgentRequest] = []
+    var request: AgentRequest? { pendingRequests.last }
 
     /// Working, or waiting on the owner in the middle of a turn.
     var isActive: Bool {
@@ -216,19 +217,27 @@ final class AgentActivity: IslandActivity {
             session.commands = 0
         case .toolWillRun:
             if event.toolName == "AskUserQuestion" {
+                recordRequest(AgentRequest(tool: event.toolName, summary: event.toolSummary, at: date,
+                                            agentID: event.agentID, isQuestion: true), on: &session)
                 session.state = .needsYou(isQuestion: true)
-                session.request = AgentRequest(tool: event.toolName, summary: event.toolSummary, at: date)
-            } else if session.needsYou, session.request?.isAbout(event, at: date) == true {
-                // The hooks hand over on their own, so the one before a request can arrive after it: this is the call
-                // still asking, not a new one.
-                break
+                session.step = event.toolSummary ?? session.step
+            } else if session.needsYou {
+                if session.pendingRequests.contains(where: { $0.isAbout(event, at: date) }) {
+                    // The hooks hand over on their own, so the one before a request can arrive after it: this is the
+                    // call still asking, not a new one.
+                    break
+                }
+                if resolveRequests(on: &session, agentID: event.agentID, matching: { $0.agentID == event.agentID }) {
+                    session.step = event.toolSummary ?? session.step
+                }
             } else {
                 session.state = .working
+                session.step = event.toolSummary ?? session.step
             }
-            session.step = event.toolSummary ?? session.step
         case .permission:
+            recordRequest(AgentRequest(tool: event.toolName, summary: event.toolSummary, at: date,
+                                        agentID: event.agentID, isQuestion: false), on: &session)
             session.state = .needsYou(isQuestion: false)
-            session.request = AgentRequest(tool: event.toolName, summary: event.toolSummary, at: date)
             session.step = event.toolSummary ?? session.step
         case .notification(let type):
             switch type {
@@ -244,7 +253,11 @@ final class AgentActivity: IslandActivity {
                 break
             }
         case .toolRan:
-            session.state = .working
+            if session.needsYou {
+                _ = resolveRequests(on: &session, agentID: event.agentID, matching: { $0.matchesRun(event) })
+            } else {
+                session.state = .working
+            }
             if let file = event.editedFile { session.editedFiles.insert(file) }
             if event.toolName == "Bash" { session.commands += 1 }
         case .stop:
@@ -267,8 +280,8 @@ final class AgentActivity: IslandActivity {
             session.editedFiles = []
             session.commands = 0
         }
-        if !session.needsYou { session.request = nil }
-        if before != session.state { session.stateSince = date }
+        if !session.needsYou { session.pendingRequests.removeAll() }
+        if before != session.state, !(session.needsYou && Self.isNeedsYou(before)) { session.stateSince = date }
         sessions[sessionID] = session
         // Keep Awake hears first: its peek saying it turned off gives way to the one saying how the turn ended, which
         // matters more, while the eye leaving the notch still shows it.
@@ -501,6 +514,29 @@ final class AgentActivity: IslandActivity {
         }
     }
 
+    private func recordRequest(_ request: AgentRequest, on session: inout AgentSession) {
+        session.pendingRequests.removeAll { $0.agentID == request.agentID }
+        session.pendingRequests.append(request)
+    }
+
+    /// Resolves requests matching `shouldRemove`; returns true when no request remains and the session is working again.
+    private func resolveRequests(on session: inout AgentSession, agentID: String?,
+                                 matching shouldRemove: (AgentRequest) -> Bool) -> Bool {
+        if session.pendingRequests.isEmpty {
+            guard agentID == nil else { return false }
+            session.state = .working
+            return true
+        }
+        session.pendingRequests.removeAll(where: shouldRemove)
+        if session.pendingRequests.isEmpty {
+            session.state = .working
+            return true
+        }
+        session.state = .needsYou(isQuestion: session.pendingRequests.last?.isQuestion ?? false)
+        session.step = session.pendingRequests.last?.summary ?? session.step
+        return false
+    }
+
     /// Tells Keep Awake once no session works any more: as the last one finishes, and also when a turn ends with none
     /// working that Jambul knew of, as after a relaunch, when it only hears of a session as its turn ends.
     private func finishIfDone(wasActive: Bool, turnEnded: Bool) {
@@ -541,7 +577,7 @@ final class AgentActivity: IslandActivity {
         session.state = .stopped
         session.stateSince = date
         session.turnEndedAt = date
-        session.request = nil
+        session.pendingRequests.removeAll()
         sessions[id] = session
         quietTasks[id] = nil
         Logger.activities.notice("agent: \(Self.logName(before), privacy: .public) → stopped, \(stale ? "quiet" : "interrupted", privacy: .public)")
@@ -555,6 +591,11 @@ final class AgentActivity: IslandActivity {
         case .working, .needsYou: true
         default: false
         }
+    }
+
+    private static func isNeedsYou(_ state: AgentSession.State) -> Bool {
+        if case .needsYou = state { return true }
+        return false
     }
 
     private static func logName(_ state: AgentSession.State) -> String {
@@ -579,9 +620,16 @@ struct AgentRequest: Equatable {
     var tool: String?
     var summary: String?
     var at: Date
+    var agentID: String?
+    var isQuestion = false
 
     func isAbout(_ event: AgentEvent, at date: Date) -> Bool {
-        event.toolName == tool && event.toolSummary == summary && date.timeIntervalSince(at) < Self.lateBy
+        event.agentID == agentID && event.toolName == tool && event.toolSummary == summary
+            && date.timeIntervalSince(at) < Self.lateBy
+    }
+
+    func matchesRun(_ event: AgentEvent) -> Bool {
+        event.agentID == agentID && (tool == nil || event.toolName == tool)
     }
 }
 

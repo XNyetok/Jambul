@@ -25,6 +25,8 @@ struct AgentEvent: Equatable {
 
     var kind: Kind
     var session: String
+    /// Which subagent inside `session` sent the hook; nil on the main thread.
+    var agentID: String? = nil
     /// The session's folder; its last part names the project.
     var cwd: String?
     /// The bundle identifier of the app Claude Code runs in, like com.apple.Terminal.
@@ -61,8 +63,9 @@ struct AgentEvent: Equatable {
               let kind = kind(named: name, root: root) else { return nil }
         let toolName = root["tool_name"] as? String
         let input = root["tool_input"] as? [String: Any] ?? [:]
-        var event = AgentEvent(kind: kind, session: session, cwd: root["cwd"] as? String, terminal: app,
-                               transcriptPath: root["transcript_path"] as? String, toolName: toolName,
+        let agentID = (root["agent_id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        var event = AgentEvent(kind: kind, session: session, agentID: agentID, cwd: root["cwd"] as? String,
+                               terminal: app, transcriptPath: root["transcript_path"] as? String, toolName: toolName,
                                toolUseID: root["tool_use_id"] as? String)
         if let toolName {
             event.toolSummary = summary(of: toolName, input: input)
@@ -114,7 +117,9 @@ struct AgentEvent: Equatable {
     private static func parseCutShort(_ text: String, terminal: String?) -> AgentEvent? {
         guard let session = field("session_id", in: text), let name = field("hook_event_name", in: text),
               let kind = kind(named: name, root: [:]) else { return nil }
-        return AgentEvent(kind: kind, session: session, cwd: field("cwd", in: text), terminal: terminal,
+        return AgentEvent(kind: kind, session: session,
+                          agentID: field("agent_id", in: text).flatMap { $0.isEmpty ? nil : $0 },
+                          cwd: field("cwd", in: text), terminal: terminal,
                           transcriptPath: field("transcript_path", in: text), toolName: field("tool_name", in: text))
     }
 

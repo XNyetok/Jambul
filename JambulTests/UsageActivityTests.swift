@@ -196,6 +196,46 @@ struct UsageActivityTests {
         #expect(usage.noteClaudeRequestTime(1_500, session: "a"))
     }
 
+    /// A concurrent session finishing a long request with the lower limits it started with does not flicker the window
+    /// down; a genuine handback is still accepted once confirmed across time or another session.
+    @Test func aLongRequestInAnotherSessionDoesNotFlickerClaudeDown() {
+        let usage = makeUsage()
+        usage.record(claude(0.49), session: "s2")
+        // Another session finishes a long turn holding the 45% it started with.
+        usage.record(claude(0.45), session: "s1")
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.49)
+        // Even a second quick reading from s1 within the window does not drop it.
+        clock.now = clock.now.addingTimeInterval(5)
+        usage.record(claude(0.45), session: "s1")
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.49)
+        // s2 still sees 49%, clearing the held drop; an idle repeat from s2 doesn't.
+        usage.record(claude(0.49), session: "s2")
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.49)
+        usage.record(claude(0.13), session: "s1")
+        usage.record(claude(0.49), isCurrent: false, session: "s2")
+        // A second session seeing the drop confirms it immediately.
+        usage.record(claude(0.13), session: "s3")
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
+
+        // The session that set the peak can still drop immediately on its own.
+        usage.record(claude(0.82), session: "s3")
+        usage.record(claude(0.13), session: "s3")
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
+
+        // When quota really is handed back, s1 alone confirms it after working longer.
+        usage.record(claude(0.90), session: "s2")
+        usage.record(claude(0.13), session: "s1")
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.90)
+        clock.now = clock.now.addingTimeInterval(UsageActivity.claudeWorkingFor)
+        usage.record(claude(0.13), session: "s1")
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.13)
+
+        // A new window resets the peak session.
+        usage.record(claude(0.50, resetsIn: 6 * 3_600), session: "s2")
+        usage.record(claude(0.05, resetsIn: 12 * 3_600), session: "s1")
+        #expect(usage.readings[.claude]?.windows.first?.used == 0.05)
+    }
+
     @Test func theNumbersAndWarningsSurviveARelaunch() throws {
         let suiteName = "JambulTests.Usage"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

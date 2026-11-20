@@ -58,10 +58,11 @@ struct AgentActivityTests {
         return agent
     }
 
-    private func event(_ kind: AgentEvent.Kind, session: String = "s1", tool: String? = nil, call: String? = nil,
-                       summary: String? = nil, file: String? = nil, reply: String? = nil,
-                       cwd: String? = nil) -> AgentEvent {
-        AgentEvent(kind: kind, session: session, cwd: cwd ?? "/tmp/work/\(session == "s1" ? "Jambul" : "Other")",
+    private func event(_ kind: AgentEvent.Kind, session: String = "s1", agentID: String? = nil,
+                       tool: String? = nil, call: String? = nil, summary: String? = nil, file: String? = nil,
+                       reply: String? = nil, cwd: String? = nil) -> AgentEvent {
+        AgentEvent(kind: kind, session: session, agentID: agentID,
+                   cwd: cwd ?? "/tmp/work/\(session == "s1" ? "Jambul" : "Other")",
                    terminal: "com.apple.Terminal", transcriptPath: "/tmp/work/\(session).jsonl", toolName: tool,
                    toolUseID: call, toolSummary: summary, editedFile: file, reply: reply)
     }
@@ -279,6 +280,45 @@ struct AgentActivityTests {
         clock.now.addTimeInterval(AgentRequest.lateBy + 1)
         agent.receive(event(.toolWillRun, tool: "Bash", call: "t3", summary: "Touch a file"))
         #expect(agent.liveSession?.state == .working)
+    }
+
+    /// Parallel subagents in one session keep "Needs you" open while another subagent runs or finishes tools.
+    @Test func aParallelSubagentDoesNotFlickerNeedsYou() {
+        let agent = makeAgent()
+        agent.receive(event(.prompt))
+        agent.receive(event(.permission, agentID: "sub-1", tool: "Bash", summary: "Run tests"))
+        #expect(agent.liveSession?.state == .needsYou(isQuestion: false))
+
+        // A second subagent (or the main thread) runs and finishes tools while sub-1 still waits on the owner.
+        agent.receive(event(.toolWillRun, agentID: "sub-2", tool: "Read", call: "t2", summary: "Reading Foo.swift"))
+        agent.receive(event(.toolRan(failed: false), agentID: "sub-2", tool: "Read", call: "t2", summary: "Reading Foo.swift"))
+        agent.receive(event(.toolWillRun, tool: "Grep", call: "t3", summary: "Searching"))
+        #expect(agent.liveSession?.state == .needsYou(isQuestion: false))
+        #expect(agent.liveSession?.step == "Run tests")
+        #expect(inbox.withdrawn == 0)
+
+        // A late PreToolUse from another subagent with the same tool name doesn't steal or clear sub-1's request.
+        clock.now.addTimeInterval(0.2)
+        agent.receive(event(.toolWillRun, agentID: "sub-2", tool: "Bash", call: "t4", summary: "Run tests"))
+        #expect(agent.liveSession?.state == .needsYou(isQuestion: false))
+
+        // If sub-2 also asks a question, resolving sub-2 first restores sub-1's step and keeps the wait clock.
+        let waitingSince = agent.liveSession?.stateSince
+        clock.now.addTimeInterval(10)
+        agent.receive(event(.toolWillRun, agentID: "sub-2", tool: "AskUserQuestion", call: "q1", summary: "Asking you"))
+        #expect(agent.liveSession?.state == .needsYou(isQuestion: true))
+        #expect(agent.liveSession?.stateSince == waitingSince)
+
+        agent.receive(event(.toolRan(failed: false), agentID: "sub-2", tool: "AskUserQuestion", call: "q1"))
+        #expect(agent.liveSession?.state == .needsYou(isQuestion: false))
+        #expect(agent.liveSession?.step == "Run tests")
+        #expect(agent.liveSession?.stateSince == waitingSince)
+        #expect(inbox.withdrawn == 0)
+
+        // sub-1 moving on to another tool (e.g. after refusal) resolves sub-1's own request.
+        agent.receive(event(.toolWillRun, agentID: "sub-1", tool: "Read", call: "t5", summary: "Reading Bar.swift"))
+        #expect(agent.liveSession?.state == .working)
+        #expect(inbox.withdrawnTopics == ["claude:s1"])
     }
 
     @Test func waitingForAPromptLeavesAnOpenQuestionWaiting() {
