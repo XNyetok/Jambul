@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed
+- Codex no longer logs a warning each time Jambul disconnects from it after a turn.
+
 ## [0.6.2] - 2026-11-21
 Antigravity sessions say Done, finished turns get a new peek, and Settings fits in two short tabs.
 

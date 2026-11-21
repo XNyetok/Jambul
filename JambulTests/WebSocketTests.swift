@@ -117,6 +117,23 @@ struct CodexControlConnectionTests {
         #expect(await events.next() == .message(Data(#"{"id":7}"#.utf8)))
     }
 
+    /// Without a Close frame, Codex's daemon logs every connection Jambul ends as a reset.
+    @Test @MainActor func closingSendsTheDaemonACloseFrame() async throws {
+        let home = try temporaryHome()
+        let daemon = try FakeCodexDaemon(home: home) { _, _ in [] }
+        defer {
+            daemon.stop()
+            try? FileManager.default.removeItem(at: home)
+        }
+        let connection = try connect(home)
+        var events = connection.events.makeAsyncIterator()
+        #expect(await events.next() == .upgraded)
+        connection.close()
+        #expect(await events.next() == nil)
+        try await waitUntil { daemon.ending != nil }
+        #expect(daemon.ending == .closeFrame)
+    }
+
     @Test func aDaemonThatHangsUpEndsTheConnection() async throws {
         let home = try temporaryHome()
         let daemon = try FakeCodexDaemon(home: home) { _, _ in [] }
