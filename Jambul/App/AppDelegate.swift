@@ -137,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if usage.enabled.contains(.antigravity) { antigravityUsage.refresh() }
             if usage.enabled.contains(.codex) { codexUsage.refresh() }
         }
-        usage.onConnect = { [weak self] _ in self?.openSettings() }
+        usage.onConnect = { [weak self] _ in self?.settings.show(.aiTools) }
         antigravityUsage.onReading = { [usage] in usage.record($0) }
         antigravityUsage.onProblem = { [usage] in usage.markProblem(.antigravity, $0) }
         codexUsage.onReading = { [usage] in usage.record($0) }
@@ -226,12 +226,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Coding sessions
 
     private func startAgent(keepAwake: KeepAwakeActivity) {
-        agent.onConnect = { [weak self] in self?.openSettings() }
+        agent.onConnect = { [weak self] in self?.settings.show(.aiTools) }
         agent.onAllFinished = { [weak keepAwake] in keepAwake?.agentsFinished() }
         agent.onMonitoringLost = { [weak keepAwake] in keepAwake?.stopWaitingForAgents() }
         keepAwake.agentsAreWorking = { [agent] in agent.isLive }
         codexSessions.onUpdate = { [agent] in agent.receive($0) }
-        codexSessions.onConnectionChange = { [agent] in agent.codexRuntimeAvailable = $0 }
         antigravitySessions.onUpdate = { [agent] in agent.receive($0) }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
                                                           queue: .main) { [weak self] _ in

@@ -120,7 +120,6 @@ final class AgentActivity: IslandActivity {
     var connectedProviders: Set<UsageProvider> = []
     var isConnected: Bool { !connectedProviders.isEmpty }
     var problems: [UsageProvider: String] = [:]
-    var codexRuntimeAvailable = false
 
     /// Asks for the hooks to be connected, from the tab.
     @ObservationIgnored var onConnect: (@MainActor () -> Void)?

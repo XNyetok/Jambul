@@ -80,6 +80,7 @@ Anything due while the Mac sleeps waits for `NSWorkspace.didWakeNotification` be
 
 ## Settings and system state
 - Settings live in `Preferences` (`@Observable`, saved to `UserDefaults` on each change), and `IslandController` applies them.
+- The Settings window has a toolbar tab per pane, General and AI Tools, and is as tall as the pane it shows (`SettingsTabs`). AI Tools groups each tool's usage limits and coding sessions together, so one tool's two switches can't be mistaken for another's. Connect in the island opens it there.
 - Full-screen detection is `SpaceInspector`, which reads SkyLight's Space type (4 is full screen) on each Space change. SkyLight is a private framework, so it is loaded at runtime, and if it ever goes away every Space reads as a regular desktop.
 
 ## Buttons inside the island
