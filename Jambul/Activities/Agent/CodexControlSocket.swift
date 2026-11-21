@@ -98,9 +98,15 @@ final class CodexControlConnection: @unchecked Sendable {
         }
     }
 
-    /// Closes it, and `events` finishes. Closing again does nothing.
+    /// Ends it with a Close frame, and `events` finishes. Closing again does nothing. The daemon logs a warning for each
+    /// connection that ends without one, and closes its end as soon as one arrives (measured with Codex 0.171), so
+    /// there is no answer to wait for.
     func close() {
-        queue.async { [self] in finish() }
+        queue.async { [self] in
+            // Status 1000, a normal closure. Before the upgrade the daemon isn't reading frames yet.
+            if !isClosed, reader.isUpgraded { write(WebSocket.frame(Data([0x03, 0xE8]), opcode: .close)) }
+            finish()
+        }
     }
 
     // MARK: On `queue`
@@ -145,7 +151,7 @@ final class CodexControlConnection: @unchecked Sendable {
     }
 }
 
-/// The parts of WebSocket (RFC 6455) Jambul needs as a client: the upgrade, and text frames each way.
+/// The parts of WebSocket (RFC 6455) Jambul needs as a client: the upgrade, text frames each way, and closing.
 enum WebSocket {
     static func makeKey() -> String {
         var generator = SystemRandomNumberGenerator()

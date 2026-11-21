@@ -6,14 +6,20 @@ import Foundation
 /// and answers each request with what `reply` gives for its method and id, as JSON texts. It speaks WebSocket as
 /// the daemon does (measured with Codex 0.171), not the JSON lines a proxy could have translated it to.
 final class FakeCodexDaemon: @unchecked Sendable {
+    /// How a connection ended: with the client's Close frame, or without one, which Codex's daemon logs as a reset.
+    enum Ending { case closeFrame, reset }
+
     let socketPath: String
     /// Requests the daemon received, by method, in order.
     var methods: [String] { lock.withLock { received } }
+    /// How the connection ended, once it has.
+    var ending: Ending? { lock.withLock { ended } }
     private let listener: Int32
     private let reply: @Sendable (_ method: String, _ id: Int?) -> [String]
     private let answersUpgrade: Bool
     private let lock = NSLock()
     private var received: [String] = []
+    private var ended: Ending?
     private var client: Int32 = -1
 
     /// - Parameters:
@@ -84,8 +90,14 @@ final class FakeCodexDaemon: @unchecked Sendable {
         var pending = request.range(of: Data("\r\n\r\n".utf8)).map { Data(request[$0.upperBound...]) } ?? Data()
         while true {
             guard let events = reader.read(pending) else { return }
-            for case .message(let data) in events {
-                guard let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            for event in events {
+                if event == .closed {
+                    // Like Codex's daemon, it closes its end at once, without a Close frame of its own.
+                    lock.withLock { ended = .closeFrame }
+                    return
+                }
+                guard case .message(let data) = event,
+                      let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let method = message["method"] as? String else { continue }
                 lock.withLock { received.append(method) }
                 for text in reply(method, message["id"] as? Int) {
@@ -94,7 +106,10 @@ final class FakeCodexDaemon: @unchecked Sendable {
                 }
             }
             let count = read(connection, &buffer, buffer.count)
-            guard count > 0 else { return }
+            guard count > 0 else {
+                lock.withLock { ended = .reset }
+                return
+            }
             pending = Data(buffer[..<count])
         }
     }
