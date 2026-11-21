@@ -208,13 +208,24 @@ enum Motion {
         static let workingStepAngle: Double = 36
     }
 
-    /// Claude Code's sessions: a finished turn's check, a failed turn's peek shaking its head, and a working session's
-    /// ring in the open island.
+    /// Coding sessions: a finished turn's badge, a failed turn's peek shaking its head, and a working session's ring in
+    /// the open island.
     enum Agent {
-        /// The check's circle pops in, past its size and back, as the peek comes out of its blur; the check then draws
-        /// itself across it.
-        static let checkPop: Animation = .spring(duration: 0.4, bounce: 0.45).delay(0.2)
-        static let checkDraw: Animation = .easeOut(duration: 0.3).delay(0.35)
+        /// A finished turn's badge, as the peek comes out of its blur: the logo settles in, the ring around it closes
+        /// from where the working ring's arc ends, the check pops onto the ring and draws itself, and one ripple spreads
+        /// from the ring as it lands. About a second; nothing moves after.
+        static func logoArrive(_ index: Int = 0) -> Animation {
+            .spring(duration: 0.5, bounce: 0.35).delay(0.1 + 0.07 * Double(index))
+        }
+        static let logoFrom: CGFloat = 0.6
+        /// The working ring's arc (`AgentStatusCircle`), where the closing ring starts.
+        static let ringFrom: CGFloat = 0.3
+        static let ringClose: Animation = .easeInOut(duration: 0.5).delay(0.18)
+        static let checkPop: Animation = .spring(duration: 0.4, bounce: 0.45).delay(0.6)
+        static let checkDraw: Animation = .easeOut(duration: 0.25).delay(0.72)
+        static let ripple: Animation = .easeOut(duration: 0.7).delay(0.62)
+        /// How far past the ring the ripple spreads, as a part of its size.
+        static let rippleGrowth: CGFloat = 0.6
         /// The shake waits for the peek to come out, rather than playing while it is still blurred.
         static let shakeAfter: Duration = .milliseconds(350)
         static let shake: Animation = .spring(duration: 0.12, bounce: 0.2)

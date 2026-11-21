@@ -49,3 +49,44 @@ struct PeekCheckTests {
         return stride(from: 3, to: pixels.count, by: 4).map { pixels[$0] }
     }
 }
+
+/// A finished turn's badge moves as the peek comes out and then holds still, with nothing left of its ripple.
+@MainActor
+struct PeekCompletionTests {
+    private static let one = [PeekLogo(asset: "ClaudeLogo", name: "Claude Code")]
+    private static let three = [PeekLogo(asset: "OpenAILogo", name: "Codex"),
+                                PeekLogo(asset: "AntigravityLogo", name: "Antigravity"),
+                                PeekLogo(asset: "ClaudeLogo", name: "Claude Code")]
+
+    /// Its frame is the same from the first moment to the last, so the title beside it never shifts.
+    @Test func theBadgeKeepsItsPlaceAsItMoves() {
+        for logos in [Self.one, Self.three] {
+            let start = NSHostingView(rootView: PeekCompletionBadge(logos: logos, tint: .orange, progress: 0))
+            let end = NSHostingView(rootView: PeekCompletionBadge(logos: logos, tint: .orange, progress: 1))
+            #expect(start.fittingSize == end.fittingSize)
+        }
+        let single = NSHostingView(rootView: PeekCompletionBadge(logos: Self.one, tint: .orange, progress: 1))
+        #expect(single.fittingSize == CGSize(width: PeekCompletionBadge.ringSize, height: PeekCompletionBadge.ringSize))
+    }
+
+    /// The ripple is unseen before it spreads and once it has, and seen in between.
+    @Test func theRippleLeavesNothingBehind() throws {
+        func covered(_ progress: CGFloat) throws -> Int {
+            let renderer = ImageRenderer(content: PeekRipple(progress: progress, growth: 0.6)
+                .fill(.white, style: FillStyle(eoFill: true))
+                .frame(width: 26, height: 26).padding(10))
+            renderer.scale = 2
+            let image = try #require(renderer.cgImage)
+            let w = image.width, h = image.height
+            var pixels = [UInt8](repeating: 0, count: w * h * 4)
+            let context = try #require(CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8,
+                                                 bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return stride(from: 3, to: pixels.count, by: 4).filter { pixels[$0] > 2 }.count
+        }
+        #expect(try covered(0) == 0)
+        #expect(try covered(1) == 0)
+        #expect(try covered(0.5) > 0)
+    }
+}

@@ -155,9 +155,11 @@ struct AgentActivityTests {
         #expect(peek.title == "Done · Jambul")
         #expect(peek.detail == "1m 28s")
         #expect(peek.subtitle == "Tests pass")
-        // A check, as in the session's circle, popping in and drawing itself.
+        // The client's logo in a ring that closes, then a check: "Done" in the client's color.
         #expect(peek.symbol == "checkmark.circle.fill")
-        #expect(peek.motion == .draw)
+        #expect(peek.motion == .complete)
+        #expect(peek.logos == [PeekLogo(asset: "ClaudeLogo", name: "Claude Code")])
+        #expect(peek.emphasis == "Done")
         #expect(!peek.mustBeSeen)
     }
 

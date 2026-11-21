@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Changed
+- A finished coding session's peek shows the tool's logo in a ring that closes into a check, with the project first.
+
 ### Fixed
 - Antigravity sessions say Done when a turn finishes, instead of showing it as stopped.
 - Jambul reads Codex session status straight from Codex's background service, instead of starting a Codex process every few seconds while a session works.

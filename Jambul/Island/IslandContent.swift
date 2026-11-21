@@ -134,9 +134,8 @@ private struct PeekIcon: View {
     }
 
     @ViewBuilder private var icon: some View {
-        if peek.motion == .draw {
-            let shown = arrived || reduceMotion
-            PeekCheck(tint: peek.tint, scale: shown ? 1 : 0, drawn: shown ? 1 : 0)
+        if peek.motion == .complete {
+            PeekCompletionBadge(logos: peek.logos, tint: peek.tint, progress: arrived || reduceMotion ? 1 : 0)
         } else if let closing = peek.motion.eyesClosing {
             PeekEyes(tint: peek.tint, closing: closing)
         } else if let logo = peek.logo {
@@ -197,40 +196,156 @@ private struct PeekEyes: View {
 }
 
 /// `checkmark.circle.fill` drawn rather than shown, so it can pop in and draw its check: the circle at `scale` of its
-/// size, and the check drawn along `drawn` of its stroke, each animating as it changes. Laid out as the symbol, which it
-/// matches once both are 1, so the title sits where it does on other peeks.
+/// size, and the check drawn along `drawn` of its stroke, each animating as it changes. Laid out as the symbol at `size`,
+/// which it matches once both are 1.
 struct PeekCheck: View {
     let tint: Color
     let scale: CGFloat
     let drawn: CGFloat
+    var size: CGFloat = 17
+    /// A ring of this color around the circle, cutting it out of what lies behind, as a badge on a logo.
+    var cutout: Color?
     /// The circle's diameter as a part of the symbol's width, and the check's stroke as a part of the circle's
     /// (measured on the symbol).
     private static let circle: CGFloat = 0.85
     private static let stroke: CGFloat = 0.094
+    /// The cutout ring's width, as a part of the circle's diameter.
+    private static let cutoutWidth: CGFloat = 0.16
 
     var body: some View {
         Image(systemName: "checkmark.circle.fill")
-            .font(.system(size: 17, weight: .semibold))
+            .font(.system(size: size, weight: .semibold))
             .hidden()
             .overlay {
                 GeometryReader { proxy in
                     let diameter = proxy.size.width * Self.circle
                     ZStack {
-                        Circle().fill(tint)
-                        CheckStroke()
-                            .trim(from: 0, to: drawn)
-                            .stroke(style: StrokeStyle(lineWidth: diameter * Self.stroke, lineCap: .round,
-                                                       lineJoin: .round))
-                            .blendMode(.destinationOut)
-                            .animation(Motion.Agent.checkDraw, value: drawn)
+                        if let cutout {
+                            Circle()
+                                .fill(cutout)
+                                .frame(width: diameter * (1 + 2 * Self.cutoutWidth),
+                                       height: diameter * (1 + 2 * Self.cutoutWidth))
+                        }
+                        ZStack {
+                            Circle().fill(tint)
+                            CheckStroke()
+                                .trim(from: 0, to: drawn)
+                                .stroke(style: StrokeStyle(lineWidth: diameter * Self.stroke, lineCap: .round,
+                                                           lineJoin: .round))
+                                .blendMode(.destinationOut)
+                                .animation(Motion.Agent.checkDraw, value: drawn)
+                        }
+                        .frame(width: diameter, height: diameter)
+                        .compositingGroup()
                     }
-                    .frame(width: diameter, height: diameter)
-                    .compositingGroup()
                     .scaleEffect(scale)
                     .animation(Motion.Agent.checkPop, value: scale)
                     .frame(width: proxy.size.width, height: proxy.size.height)
                 }
             }
+    }
+}
+
+/// What a finished turn's peek shows in place of a symbol, at `progress` of its arrival. One session's logo sits in a
+/// ring that closes from the working ring's arc, as if that ring had finished, with a ripple spreading from it as it
+/// does; several sessions' logos stand side by side. Either way a check then pops onto the corner and draws itself.
+/// Every part moves on its own timing as `progress` goes from 0 to 1, and it holds still at 1.
+struct PeekCompletionBadge: View {
+    let logos: [PeekLogo]
+    let tint: Color
+    let progress: CGFloat
+    static let ringSize: CGFloat = 26
+    static let ringWidth: CGFloat = 2
+    static let logoSize: CGFloat = 14
+    /// Each logo of several, in a disc that overlaps the one before it.
+    static let discSize: CGFloat = 20
+    static let discOverlap: CGFloat = 7
+
+    var body: some View {
+        Group {
+            if logos.count > 1 {
+                discs
+            } else {
+                ring
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            PeekCheck(tint: tint, scale: progress, drawn: progress, size: 10, cutout: .black)
+                .offset(x: 3, y: 3)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(ListFormatter.localizedString(byJoining: logos.map(\.name))))
+    }
+
+    private var ring: some View {
+        ZStack {
+            Circle()
+                .inset(by: Self.ringWidth / 2)
+                .stroke(.white.opacity(0.16), lineWidth: Self.ringWidth)
+            Circle()
+                .inset(by: Self.ringWidth / 2)
+                .trim(from: 0, to: Motion.Agent.ringFrom + (1 - Motion.Agent.ringFrom) * progress)
+                .stroke(tint, style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(Motion.Agent.ringClose, value: progress)
+            if let logo = logos.first { logoImage(logo, index: 0) }
+        }
+        .frame(width: Self.ringSize, height: Self.ringSize)
+        .background {
+            PeekRipple(progress: progress, growth: Motion.Agent.rippleGrowth)
+                .fill(tint.opacity(0.55), style: FillStyle(eoFill: true))
+                .animation(Motion.Agent.ripple, value: progress)
+        }
+    }
+
+    private var discs: some View {
+        HStack(spacing: -Self.discOverlap) {
+            ForEach(Array(logos.prefix(3).enumerated()), id: \.offset) { index, logo in
+                logoImage(logo, index: index, size: Self.discSize * 0.6)
+                    .frame(width: Self.discSize, height: Self.discSize)
+                    .background(Circle().fill(Color(white: 0.17)))
+                    .background(Circle().fill(.black).padding(-1.5))
+                    .zIndex(Double(index))
+            }
+        }
+        .frame(height: Self.ringSize)
+    }
+
+    private func logoImage(_ logo: PeekLogo, index: Int, size: CGFloat = logoSize) -> some View {
+        Image(logo.asset)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size, height: size)
+            .scaleEffect(Motion.Agent.logoFrom + (1 - Motion.Agent.logoFrom) * progress)
+            .opacity(0.4 + 0.6 * progress)
+            .animation(Motion.Agent.logoArrive(index), value: progress)
+    }
+}
+
+/// One ring spreading from the badge, at `progress` of the way: it grows `growth` past its size as it thickens and then
+/// thins away, so it is unseen at 0 and at 1 and nothing is left once it has spread.
+struct PeekRipple: Shape {
+    var progress: CGFloat
+    var growth: CGFloat
+    static let widest: CGFloat = 2
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let progress = min(max(progress, 0), 1)
+        let width = Self.widest * sin(CGFloat.pi * progress)
+        guard width > 0.01 else { return Path() }
+        let radius = min(rect.width, rect.height) / 2 * (1 + growth * progress)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        var path = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: 2 * radius,
+                                          height: 2 * radius))
+        let inner = radius - width
+        path.addEllipse(in: CGRect(x: center.x - inner, y: center.y - inner, width: 2 * inner, height: 2 * inner))
+        return path
     }
 }
 

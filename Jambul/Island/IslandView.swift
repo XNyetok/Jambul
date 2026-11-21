@@ -136,6 +136,14 @@ private struct IslandPreview: View {
                                             presentation: .peek, peek: peek))
 }
 
+#Preview("Done Peek") {
+    let peek = Peek(symbol: "checkmark.circle.fill", tint: UsageProvider.claude.brandColor, title: "Done · Jambul",
+                    detail: "4m 12s", subtitle: "All tests pass", logos: [PeekLogo(asset: "ClaudeLogo", name: "Claude Code")],
+                    emphasis: "Done", motion: .complete)
+    return IslandPreview(model: IslandModel(notch: previewNotch, activities: ActivityCenter(),
+                                            presentation: .peek, peek: peek))
+}
+
 /// A center with Jambul's tabs, the timer or Keep Awake on if asked, the battery with a reading, and the usage limits
 /// with two subscriptions. Neither the timer nor Keep Awake holds the Mac awake or the screen on, which they would for as
 /// long as the preview lives, and nothing is remembered.

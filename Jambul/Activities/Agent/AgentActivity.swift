@@ -404,6 +404,11 @@ final class AgentActivity: IslandActivity {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
+    /// A session's client, as its logo in a peek.
+    static func logo(_ session: AgentSession) -> PeekLogo {
+        PeekLogo(asset: session.provider.logoAsset, name: session.provider.sessionName)
+    }
+
     /// How long a turn took, like "28s", "1m 28s" or "1h 05m".
     static func duration(_ seconds: TimeInterval) -> String {
         let whole = max(Int(seconds.rounded()), 0)
@@ -458,10 +463,14 @@ final class AgentActivity: IslandActivity {
             let took = session.turnStartedAt.map { now().timeIntervalSince($0) }
             let watched = session.terminal != nil && frontmostApp() == session.terminal
             if watched, let took, took < Self.watchedTurn { return }
+            // The logo says which client it was; the second line says what it said, what it did, or failing both,
+            // which client, so every finished turn reads the same.
+            let done = String(localized: "Done")
             postCompletion(Peek(symbol: "checkmark.circle.fill", tint: session.provider.brandColor,
-                                title: String(localized: "Done · \(name)"),
-                                detail: took.map(Self.duration), subtitle: session.reply ?? session.workSummary,
-                                duration: .seconds(4), source: id, topic: session.id, motion: .draw), for: session.id)
+                                title: String(localized: "\(done) · \(session.project)"), detail: took.map(Self.duration),
+                                subtitle: session.reply ?? session.workSummary ?? session.provider.sessionName,
+                                duration: .seconds(4), source: id, topic: session.id, logos: [Self.logo(session)],
+                                emphasis: done, motion: .complete), for: session.id)
         case .failed:
             activities?.peek(Peek(symbol: "exclamationmark.circle.fill", tint: .red,
                                   title: String(localized: "Stopped · \(name)"), subtitle: session.reply,
@@ -488,9 +497,17 @@ final class AgentActivity: IslandActivity {
             if peeks.count == 1, let peek = peeks.values.first {
                 activities?.peek(peek)
             } else if peeks.count > 1 {
-                activities?.peek(Peek(symbol: "checkmark.circle.fill", tint: .white,
+                // In the order they finished, each logo once per session and each project once.
+                let finished = peeks.keys.compactMap { sessions[$0] }
+                    .sorted { ($0.turnEndedAt ?? $0.lastEventAt, $0.id) < ($1.turnEndedAt ?? $1.lastEventAt, $1.id) }
+                let providers = Set(finished.map(\.provider))
+                let projects = finished.map(\.project).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+                activities?.peek(Peek(symbol: "checkmark.circle.fill",
+                                      tint: providers.count == 1 ? providers.first?.brandColor ?? .white : .white,
                                       title: String(localized: "\(peeks.count) sessions finished"),
-                                      duration: .seconds(4), source: id, topic: "completed", motion: .draw))
+                                      subtitle: projects.isEmpty ? nil : projects.joined(separator: " · "),
+                                      duration: .seconds(4), source: id, topic: "completed",
+                                      logos: finished.prefix(3).map(Self.logo), motion: .complete))
             }
         }
     }
