@@ -1,20 +1,46 @@
 import ServiceManagement
 import SwiftUI
 
-struct SettingsView: View {
+/// The Settings window's panes, one tab each in its toolbar.
+enum SettingsPane: Int, CaseIterable {
+    case general, aiTools
+
+    var title: String {
+        switch self {
+        case .general: String(localized: "General")
+        case .aiTools: String(localized: "AI Tools")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .aiTools: "sparkles"
+        }
+    }
+}
+
+/// Both panes are as wide, so changing tabs only changes how tall the window is.
+enum SettingsLayout {
+    static let width: CGFloat = 460
+}
+
+/// How Jambul starts, how the island answers the pointer, and what a timer sounds like.
+struct GeneralSettingsView: View {
     @Bindable var preferences: Preferences
     @Bindable var loginItem: LoginItem
-    var usage: UsageActivity?
-    var agent: AgentActivity?
-    @State private var confirmingClaude = false
-    @State private var confirmingSessions: UsageProvider?
-    /// Whether the question about connecting Claude came from turning it on, so No turns it off again.
-    @State private var confirmingFromToggle = false
 
     var body: some View {
         Form {
             Section {
-                Toggle("Open at login", isOn: $loginItem.isEnabled)
+                Toggle(isOn: $loginItem.isEnabled) {
+                    Label {
+                        Text("Open at login")
+                    } icon: {
+                        Image(systemName: "power")
+                            .frame(width: SettingsLabel.symbolWidth)
+                    }
+                }
                 if loginItem.needsApproval {
                     LabeledContent("Waiting for your approval in System Settings.") {
                         Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
@@ -32,8 +58,8 @@ struct SettingsView: View {
                     Text("Normal").tag(HoverSpeed.normal)
                     Text("Slow").tag(HoverSpeed.slow)
                 } label: {
-                    Text("Hover speed")
-                    Text("Fast opens the moment the pointer reaches the notch. Slow waits a beat, for when you often pass over it on the way to the menu bar.")
+                    SettingsLabel("Hover speed", symbol: "cursorarrow.motionlines",
+                                  detail: Text("How long the pointer rests on the notch first."))
                 }
                 .pickerStyle(.segmented)
                 Picker(selection: $preferences.hapticTaps) {
@@ -42,11 +68,14 @@ struct SettingsView: View {
                     Text("2").tag(2)
                     Text("3").tag(3)
                 } label: {
-                    Text("Haptic taps")
-                    Text("Taps on the trackpad as the pointer reaches the notch and when a timer ends. Felt only by a finger resting on a Force Touch trackpad, not with a mouse.")
+                    SettingsLabel("Haptic taps", symbol: "hand.tap",
+                                  detail: Text("Felt on a Force Touch trackpad at the notch and as a timer ends."))
                 }
                 .pickerStyle(.segmented)
-                Toggle("Hide while an app is full screen", isOn: $preferences.hidesInFullScreen)
+                Toggle(isOn: $preferences.hidesInFullScreen) {
+                    SettingsLabel("Hide in full screen", symbol: "arrow.up.left.and.arrow.down.right",
+                                  detail: Text("News you must see, like a timer ending, still shows."))
+                }
             }
             Section("Timer") {
                 LabeledContent {
@@ -71,41 +100,39 @@ struct SettingsView: View {
                         .disabled(preferences.timerSound == nil)
                     }
                 } label: {
-                    Text("Sound when a timer ends")
-                    Text("Each sound plays as you pick it.")
+                    SettingsLabel("Sound when it ends", symbol: "bell", detail: Text("Each sound plays as you pick it."))
                 }
                 .onChange(of: preferences.timerSound) { _, sound in
                     Feedback.play(sound)
                 }
             }
+        }
+        .formStyle(.grouped)
+        .frame(width: SettingsLayout.width)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
 
-            Section {
-                ForEach(UsageProvider.sessionProviders, id: \.self) { provider in
-                    Toggle(isOn: showsSessions(provider)) {
-                        Text(provider.sessionName)
-                        Text(sessionsStatus(provider))
-                    }
-                }
-            } header: {
-                Text("Coding sessions")
-            } footer: {
-                Text("Shows when a session works, needs you or is done, and lets Keep Awake stay on until it finishes.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+/// One group per AI tool, each holding the two things Jambul can show for it: how much of its plan is left, and its
+/// coding sessions. Side by side, the two switches for one tool can't be mistaken for another tool's.
+struct AIToolsSettingsView: View {
+    @Bindable var preferences: Preferences
+    var usage: UsageActivity?
+    var agent: AgentActivity?
+    @State private var confirmingClaude = false
+    @State private var confirmingSessions: UsageProvider?
+    /// Whether the question about connecting Claude came from turning it on, so No turns it off again.
+    @State private var confirmingFromToggle = false
 
-            Section {
-                ForEach(UsageProvider.allCases, id: \.self) { provider in
+    static let tools: [UsageProvider] = [.claude, .codex, .antigravity]
+
+    var body: some View {
+        Form {
+            ForEach(Self.tools, id: \.self) { provider in
+                Section {
                     Toggle(isOn: isOn(provider)) {
-                        HStack(spacing: 10) {
-                            UsageLogo(provider: provider, size: 18, onIsland: false)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(provider.displayName)
-                                Text(status(provider))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        SettingsLabel("Usage limits", symbol: "gauge.with.dots.needle.33percent",
+                                      detail: Text(status(provider)))
                     }
                     if provider == .claude, needsConnectingClaude {
                         LabeledContent("Claude’s limits arrive once its status line is connected.") {
@@ -116,13 +143,22 @@ struct SettingsView: View {
                         }
                         .foregroundStyle(.secondary)
                     }
+                    Toggle(isOn: showsSessions(provider)) {
+                        SettingsLabel("Coding sessions", symbol: "chevron.left.forwardslash.chevron.right",
+                                      detail: Text(sessionsStatus(provider)))
+                    }
+                } header: {
+                    HStack(spacing: 8) {
+                        UsageLogo(provider: provider, size: 16, onIsland: false)
+                        Text(provider.displayName)
+                    }
+                } footer: {
+                    if provider == Self.tools.last {
+                        Text("Coding sessions show when an agent works, needs you or is done, and let Keep Awake stay on until it finishes. Jambul doesn’t use the internet; Antigravity’s numbers come from agy, which asks Google.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            } header: {
-                Text("Usage limits")
-            } footer: {
-                Text("Jambul doesn’t use the internet. Antigravity’s numbers come from agy, which asks Google.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -145,12 +181,12 @@ struct SettingsView: View {
         } message: { provider in
             Text(sessionConsent(provider))
         }
-        .frame(width: 440)
+        .frame(width: SettingsLayout.width)
         .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-extension SettingsView {
+extension AIToolsSettingsView {
     /// Whether a subscription shows in the island. Claude also needs its status line connected, which the owner is
     /// asked about as they turn it on, and can do later with Connect; turning it off disconnects it.
     private func isOn(_ provider: UsageProvider) -> Binding<Bool> {
@@ -186,9 +222,7 @@ extension SettingsView {
         case .claude:
             return String(localized: "Connected · sessions you start from now on show")
         case .codex:
-            return agent?.codexRuntimeAvailable == true
-                ? String(localized: "Shared runtime connected · review new hooks in /hooks")
-                : String(localized: "Hooks installed · review in /hooks, then start a local session")
+            return String(localized: "Connected · approve Jambul’s hooks in Codex’s /hooks if it asks")
         case .antigravity:
             return String(localized: "Connected · reopen agy to pick up the hooks and status line")
         }
@@ -228,9 +262,38 @@ extension SettingsView {
     }
 }
 
+/// A setting's name with its symbol, and a line under it saying what it does or how it stands.
+struct SettingsLabel: View {
+    let title: LocalizedStringKey
+    let symbol: String
+    let detail: Text
+    static let symbolWidth: CGFloat = 20
+
+    init(_ title: LocalizedStringKey, symbol: String, detail: Text) {
+        self.title = title
+        self.symbol = symbol
+        self.detail = detail
+    }
+
+    var body: some View {
+        Label {
+            Text(title)
+            detail
+        } icon: {
+            // As wide for every symbol, so the names line up.
+            Image(systemName: symbol)
+                .frame(width: Self.symbolWidth)
+        }
+    }
+}
+
 #if DEBUG
-#Preview {
-    SettingsView(preferences: Preferences(defaults: UserDefaults(suiteName: "JambulPreview") ?? .standard),
-                 loginItem: LoginItem())
+#Preview("General") {
+    GeneralSettingsView(preferences: Preferences(defaults: UserDefaults(suiteName: "JambulPreview") ?? .standard),
+                        loginItem: LoginItem())
+}
+
+#Preview("AI Tools") {
+    AIToolsSettingsView(preferences: Preferences(defaults: UserDefaults(suiteName: "JambulPreview") ?? .standard))
 }
 #endif
