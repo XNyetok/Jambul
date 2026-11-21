@@ -105,3 +105,12 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" "Jambul-$VERSION.zip" "Jambul-$VERSION.zip.sha256" \
             --title "Jambul $VERSION" --notes-file notes.md --verify-tag
+
+  website:
+    name: Refresh jambul.web.id
+    needs: release
+    # The release was published with GITHUB_TOKEN, which starts no other workflows, so it's called here.
+    uses: ./.github/workflows/notify-website.yml
+    permissions: {}
+    secrets:
+      JAMBULWEB_DISPATCH_TOKEN: ${{ secrets.JAMBULWEB_DISPATCH_TOKEN }}

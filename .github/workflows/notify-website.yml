@@ -1,0 +1,48 @@
+name: Notify website
+
+# Starts the website's "Build & deploy" (debikurnia/Jambulweb), so jambul.web.id shows new versions,
+# download links and release notes right away instead of at its daily rebuild:
+# - from the Release workflow, once it has published a release. A release published with
+#   GITHUB_TOKEN starts no other workflows, so the release event below never sees those;
+# - when a release is edited, unpublished or deleted on GitHub. GitHub runs a release's workflows from
+#   the commit its tag points to, so releases tagged before this file existed don't start it;
+# - by hand (Actions → Notify website → Run workflow), to test the token.
+#
+# Needs the secret JAMBULWEB_DISPATCH_TOKEN: a fine-grained personal access token for
+# debikurnia/Jambulweb with only "Actions: Read and write". That's enough to start a workflow there,
+# but not to change its code. Without the secret, a release only logs a notice; a run by hand fails.
+
+on:
+  workflow_call:
+    secrets:
+      JAMBULWEB_DISPATCH_TOKEN:
+        required: false
+  release:
+    types: [published, unpublished, edited, deleted]
+  workflow_dispatch:
+
+# The job brings its own token, so GITHUB_TOKEN gets no permissions.
+permissions: {}
+
+jobs:
+  notify:
+    name: Rebuild jambul.web.id
+    # Drafts never show on the website, but a release turned back into a draft has to disappear from it.
+    if: ${{ github.event_name != 'release' || github.event.action == 'unpublished' || !github.event.release.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start the website's Build & deploy
+        env:
+          GH_TOKEN: ${{ secrets.JAMBULWEB_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+              echo "::error::JAMBULWEB_DISPATCH_TOKEN isn't set, so there's no way to start the website's build."
+              exit 1
+            fi
+            echo "::notice::JAMBULWEB_DISPATCH_TOKEN isn't set, so jambul.web.id picks this release up at its daily rebuild."
+            exit 0
+          fi
+          gh api --silent --method POST repos/debikurnia/Jambulweb/actions/workflows/deploy.yml/dispatches -f ref=main
+          echo "Started Build & deploy for jambul.web.id."

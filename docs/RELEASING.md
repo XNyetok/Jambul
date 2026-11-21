@@ -15,7 +15,7 @@ Releases are built and published by the [Release workflow](../.github/workflows/
    git push origin v0.2.0
    ```
    The pre-push hook scans the tag too, so its message and its tagger, your `user.email`, must hold nothing private.
-3. **The workflow** first runs the same scan as CI over every commit and tag, and publishes nothing if it finds anything. It then builds the Release configuration on a macOS runner and checks that both the tag and the built app match `MARKETING_VERSION`. Finally it zips `Jambul.app`, writes a SHA-256 checksum, and publishes a GitHub release with that version's notes from `CHANGELOG.md`, followed by a short install note.
+3. **The workflow** first runs the same scan as CI over every commit and tag, and publishes nothing if it finds anything. It then builds the Release configuration on a macOS runner and checks that both the tag and the built app match `MARKETING_VERSION`. Finally it zips `Jambul.app`, writes a SHA-256 checksum, and publishes a GitHub release with that version's notes from `CHANGELOG.md`, followed by a short install note. Then it starts the website's build, so [jambul.web.id](https://jambul.web.id) shows the new version and its notes a few minutes later; that takes the `JAMBULWEB_DISPATCH_TOKEN` secret, and without it the site catches up at its daily rebuild.
 4. **Check the release:** download the zip on a Mac, verify it with `shasum -a 256 -c Jambul-<version>.zip.sha256`, and open it as the README describes.
 
 ## Signing

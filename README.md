@@ -21,7 +21,7 @@ Jambul turns the notch into a living island. Hover over it to open it, move away
 - Made for MacBooks with a notch. On other screens the island appears when you move the pointer to the top center.
 
 ## Install
-1. Download the latest `Jambul-<version>.zip` from [Releases](https://github.com/XNyetok/Jambul/releases), unzip it, and move `Jambul.app` to Applications.
+1. Download the latest `Jambul-<version>.zip` from [jambul.web.id](https://jambul.web.id) or [Releases](https://github.com/XNyetok/Jambul/releases), unzip it, and move `Jambul.app` to Applications.
 2. Optionally, check the download against its checksum: `shasum -a 256 -c Jambul-<version>.zip.sha256`.
 3. Open Jambul. It isn't notarized by Apple yet, so macOS refuses to open it the first time. Go to System Settings → Privacy & Security, find the message about Jambul, and choose **Open Anyway**.
 
