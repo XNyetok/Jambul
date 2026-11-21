@@ -4,6 +4,9 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-21
+Antigravity sessions say Done, finished turns get a new peek, and Settings fits in two short tabs.
+
 ### Changed
 - Settings opens as two short tabs, General and AI Tools, with each AI tool's usage limits and sessions side by side.
 - A finished coding session's peek shows the tool's logo in a ring that closes into a check, with the project first.
@@ -103,7 +106,8 @@ The first public release.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
 
-[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/XNyetok/Jambul/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/XNyetok/Jambul/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/XNyetok/Jambul/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/XNyetok/Jambul/compare/v0.5.0...v0.5.1
