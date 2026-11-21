@@ -48,7 +48,10 @@ struct AgentSessionsTests {
         agent.receive(update(.antigravity, .done))
         try await waitUntil { !peeks.isEmpty }
         #expect(peeks.map(\.title) == ["2 sessions finished"])
-        #expect(peeks.first?.motion == .draw)
+        #expect(peeks.first?.motion == .complete)
+        // Both logos, in the order the sessions finished, and their project once.
+        #expect(peeks.first?.logos.map(\.asset) == ["OpenAILogo", "AntigravityLogo"])
+        #expect(peeks.first?.subtitle == "Jambul")
     }
 
     @Test func requestPeeksAwaitSystemNoticesAndDisappearWhenAnswered() async throws {
@@ -333,7 +336,10 @@ struct AgentSessionsTests {
         source.receive(stop)
         try await waitUntil { !peeks.isEmpty }
         #expect(agent.shownSessions.first?.state == .done)
-        #expect(peeks.map(\.title) == ["Done · Antigravity · Jambul"])
+        #expect(peeks.map(\.title) == ["Done · Jambul"])
+        // agy hands over no reply, so the second line names the client, as the logo shows it.
+        #expect(peeks.first?.subtitle == "Antigravity")
+        #expect(peeks.first?.logos.map(\.asset) == ["AntigravityLogo"])
     }
 
     private func update(_ provider: UsageProvider, _ kind: AgentSessionUpdate.Kind, turn: String? = nil,

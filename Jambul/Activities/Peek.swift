@@ -23,6 +23,8 @@ struct Peek: Identifiable, Equatable {
     var topic: String?
     /// An image from the app's assets shown in place of `symbol`, such as a subscription's logo.
     var logo: String?
+    /// Logos that make up the icon for `complete`: the sessions that finished, up to three.
+    var logos: [PeekLogo] = []
     /// How full something is, from 0 to 1, drawn as a thin bar under the message in `tint`.
     var progress: Double?
     /// The part of `title` drawn in `tint`, like the percentage in "Claude 80%".
@@ -44,11 +46,19 @@ extension Peek {
     }
 }
 
+/// A logo in a peek's icon, with the name VoiceOver reads for it.
+struct PeekLogo: Equatable {
+    var asset: String
+    var name: String
+}
+
 /// A peek's symbol moving once as it comes out. Each says something: turning to catch the eye, beating for urgency,
-/// dimming as something runs out, jumping as it comes back, popping in and drawing its check as something is done, and
-/// shaking its head as something fails. `draw` is for `checkmark.circle.fill`, which it draws itself.
+/// dimming as something runs out, jumping as it comes back, and shaking its head as something fails.
 enum PeekMotion: Equatable {
-    case none, spin, pulse, sleep, bounce, draw, shake
+    case none, spin, pulse, sleep, bounce, shake
+    /// Work that finished: its `logos` in a ring that closes as the working ring would, then a check popping onto the
+    /// ring and drawing itself.
+    case complete
     /// Keep Awake's eyes in place of the symbol, falling asleep as the peek comes out: with a smile first, for work that
     /// is done, or with heavy lids, for a battery running low.
     case smilingEyes, tiredEyes
