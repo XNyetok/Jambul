@@ -357,7 +357,13 @@ final class AgentActivity: IslandActivity {
             finishIfDone(wasActive: wasActive, turnEnded: true)
         }
         if session.state == .unavailable, Self.isActive(before) { onMonitoringLost?() }
-        if before != session.state { announce(session, after: before) }
+        if before != session.state {
+            Logger.activities.notice("""
+                agent: \(update.provider.rawValue, privacy: .public) \(Self.logName(before), privacy: .public) → \
+                \(Self.logName(session.state), privacy: .public)
+                """)
+            announce(session, after: before)
+        }
         if session.isActive {
             if quietTasks[id] == nil || before != session.state { watchExternal(session) }
         } else {

@@ -80,11 +80,7 @@ struct AgentSessionUpdate: Codable, Equatable, Sendable {
         case "PreInvocation": kind = .working
         case "Stop":
             guard input["fullyIdle"] as? Bool == true else { return nil }
-            switch input["terminationReason"] as? String {
-            case "model_stop": kind = .done
-            case "error", "max_steps_exceeded": kind = .failed
-            default: kind = .interrupted
-            }
+            kind = antigravityOutcome(input["terminationReason"] as? String, error: input["error"] as? String)
         case "statusLine":
             if input["tool_confirmation_pending"] as? Bool == true {
                 kind = .approval
@@ -103,6 +99,21 @@ struct AgentSessionUpdate: Codable, Equatable, Sendable {
         let workspace = (input["workspacePaths"] as? [String])?.first ?? input["cwd"] as? String
         return Self(provider: .antigravity, session: id, kind: kind,
                     project: project(workspace), terminal: terminal, isSnapshot: event == "statusLine", date: date)
+    }
+
+    /// How an agy turn ended. `terminationReason` names agy's reason without its `EXECUTOR_TERMINATION_REASON_` prefix,
+    /// like "NO_TOOL_CALL" for a turn the model finished; agy before 1.5 wrote "model_stop". A turn stopped on purpose
+    /// stays stopped whatever error came with it, and a reason Jambul doesn't know still ended the turn with everything
+    /// idle, so it counts as done.
+    static func antigravityOutcome(_ reason: String?, error: String?) -> Kind {
+        let reason = reason?.uppercased() ?? ""
+        if ["", "UNSPECIFIED", "USER_CANCELED", "TERMINAL_CUSTOM_HOOK"].contains(reason) { return .interrupted }
+        if let error, !error.isEmpty { return .failed }
+        switch reason {
+        case "ERROR", "MAX_INVOCATIONS", "MAX_FORCED_INVOCATIONS", "MAX_TOKEN_BUDGET_EXCEEDED", "MAX_STEPS_EXCEEDED":
+            return .failed
+        default: return .done
+        }
     }
 
     private static func project(_ path: String?) -> String? {

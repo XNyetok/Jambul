@@ -1,7 +1,8 @@
 import Foundation
+import os
 
-/// Observes the daemon that owns the user's sessions. The CLI proxy translates the local Unix WebSocket to JSONL.
-/// All requests are reads. Embedded CLI sessions can report their turn outcome through their own rollout instead.
+/// Observes the daemon that owns the user's sessions, over its local socket (`CodexControlSocket`). All requests are
+/// reads. Embedded CLI sessions can report their turn outcome through their own rollout instead.
 @MainActor
 final class CodexSessionSource {
     private struct Watched {
@@ -26,23 +27,36 @@ final class CodexSessionSource {
     var onUpdate: (@MainActor (AgentSessionUpdate) -> Void)?
     var onConnectionChange: (@MainActor (Bool) -> Void)?
 
+    /// Everything the daemon announces that Jambul doesn't read. It only needs status changes and finished turns, and
+    /// the busiest announcements carry whole outputs.
+    static let ignoredNotifications = [
+        "item/started", "item/completed", "item/agentMessage/delta", "item/plan/delta",
+        "item/commandExecution/outputDelta", "item/commandExecution/terminalInteraction", "item/fileChange/outputDelta",
+        "item/fileChange/patchUpdated", "item/mcpToolCall/progress", "item/reasoning/textDelta",
+        "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded", "item/autoApprovalReview/started",
+        "item/autoApprovalReview/completed", "command/exec/outputDelta", "process/outputDelta", "fs/changed",
+        "turn/started", "turn/diff/updated", "turn/plan/updated", "thread/tokenUsage/updated", "thread/search/partial",
+        "hook/started", "hook/completed", "account/rateLimits/updated", "mcpServer/event/stream/notification",
+        "thread/realtime/transcript/delta", "thread/realtime/item/transcript/delta", "thread/realtime/outputAudio/delta",
+    ]
+
     private let home: URL
-    private let findCodex: () -> URL?
+    private let queue = DispatchQueue(label: "com.debikurnia.Jambul.codex-daemon")
     private var watcher: FolderWatcher?
     private var watched: [String: Watched] = [:]
     private var logReads: Set<UUID> = []
     private var enabled = false
-    private var proxyTask: Task<Void, Never>?
-    private var proxy: UUID?
-    private var writer: FileHandle?
+    private var connectionTask: Task<Void, Never>?
+    /// Tells the connection open now from one closed before it.
+    private var connectionID: UUID?
+    private var connection: CodexControlConnection?
     private var ready = false
     private var lastAttempt: ContinuousClock.Instant?
     private var nextRequest = 1
     private var reads: [Int: Read] = [:]
 
-    init(home: URL = CodexSessionSource.home, findCodex: @escaping () -> URL? = CodexAccountUsage.findCodex) {
+    init(home: URL = CodexSessionSource.home) {
         self.home = home
-        self.findCodex = findCodex
     }
 
     func start() {
@@ -57,7 +71,7 @@ final class CodexSessionSource {
         watched.removeAll()
         logReads.removeAll()
         lastAttempt = nil
-        closeProxy()
+        disconnect()
     }
 
     func receiveHook(_ hook: AgentSessionUpdate) {
@@ -69,7 +83,7 @@ final class CodexSessionSource {
             if let turn = hook.turn, let current = previous?.hook.turn, turn != current { return }
             watched.removeValue(forKey: id)
             onUpdate?(hook)
-            closeIdleProxy()
+            disconnectIfIdle()
             return
         }
         if hook.kind == .opened, previous != nil { return }
@@ -100,7 +114,10 @@ final class CodexSessionSource {
             onUpdate?(update)
         }
         refresh()
-        if ready, previous?.generation != current.generation || hook.kind == .finishing && current.runtime == nil {
+        // Work going on past a request asks the daemon again, in case it didn't announce the answer.
+        let waited = current.runtime == .approval || current.runtime == .question
+        if ready, previous?.generation != current.generation || hook.kind == .finishing && current.runtime == nil
+            || waited && hook.kind == .working {
             request(.status(id, current.generation))
         }
     }
@@ -112,11 +129,12 @@ final class CodexSessionSource {
                 self?.filesChanged(paths)
             }
         }
-        guard proxy == nil, hasWorkToWatch, lastAttempt.map({ $0.duration(to: .now) >= .seconds(3) }) ?? true else { return }
+        guard connectionID == nil, hasWorkToWatch, lastAttempt.map({ $0.duration(to: .now) >= .seconds(3) }) ?? true
+        else { return }
         let path = home.appending(path: "app-server-control/app-server-control.sock").path
-        guard FileManager.default.fileExists(atPath: path), let codex = findCodex() else { return }
+        guard FileManager.default.fileExists(atPath: path) else { return }
         lastAttempt = .now
-        startProxy(executable: codex, socket: path)
+        connect(to: path)
     }
 
     private func filesChanged(_ paths: [String]) {
@@ -132,74 +150,56 @@ final class CodexSessionSource {
         for id in ids { checkLog(id) }
     }
 
-    private func startProxy(executable: URL, socket: String) {
-        let input = Pipe()
-        let output = Pipe()
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["app-server", "proxy", "--sock", socket]
-        process.currentDirectoryURL = FileManager.default.temporaryDirectory
-        process.standardInput = input
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        let writer = input.fileHandleForWriting
-        guard fcntl(writer.fileDescriptor, F_SETNOSIGPIPE, 1) != -1,
-              fcntl(writer.fileDescriptor, F_SETFL, O_NONBLOCK) != -1,
-              (try? process.run()) != nil else { return }
-        let token = UUID()
-        proxy = token
-        self.writer = writer
-        let reader = output.fileHandleForReading
-        let running = RunningProcess(process)
-        let (chunks, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingOldest(32))
-        reader.readabilityHandler = { handle in
-            let data = handle.availableData
-            if data.isEmpty { continuation.finish() }
-            else if case .dropped = continuation.yield(data) { continuation.finish() }
-        }
-        proxyTask = Task { [weak self] in
+    private func connect(to path: String) {
+        guard let connection = CodexControlConnection(path: path, queue: queue) else { return }
+        let id = UUID()
+        connectionID = id
+        self.connection = connection
+        connectionTask = Task { [weak self] in
             let deadline = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(5))
-                guard !Task.isCancelled, let self, proxy == token, !ready else { return }
-                continuation.finish()
+                guard !Task.isCancelled, let self, connectionID == id, !ready else { return }
+                connection.close()
             }
             defer {
                 deadline.cancel()
-                reader.readabilityHandler = nil
-                try? writer.close()
-                running.stop()
-                if self?.proxy == token { self?.closeProxy() }
+                connection.close()
+                if self?.connectionID == id { self?.disconnect() }
             }
-            var buffer = Data()
-            for await chunk in chunks {
-                guard !Task.isCancelled, let self, proxy == token else { return }
-                buffer.append(chunk)
-                while let newline = buffer.firstIndex(of: 0x0A) {
-                    let line = buffer.prefix(upTo: newline)
-                    buffer.removeSubrange(buffer.startIndex...newline)
-                    if let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any] {
+            for await event in connection.events {
+                guard !Task.isCancelled, let self, connectionID == id else { return }
+                switch event {
+                case .upgraded:
+                    send(["id": 0, "method": "initialize",
+                          "params": ["clientInfo": ["name": "jambul_sessions", "title": "Jambul", "version": "1"],
+                                     "capabilities": ["optOutNotificationMethods": Self.ignoredNotifications]]])
+                case .message(let data):
+                    if let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                         receive(message)
                     }
+                case .ping, .closed:
+                    // Answered and handled where the connection reads.
+                    break
                 }
-                guard buffer.count <= 1 << 20 else { return }
+                // What it received can have closed the connection.
+                guard connectionID == id else { return }
             }
         }
-        send(["id": 0, "method": "initialize",
-              "params": ["clientInfo": ["name": "jambul_sessions", "title": "Jambul", "version": "1"],
-                         "capabilities": ["optOutNotificationMethods": ["item/agentMessage/delta",
-                             "item/commandExecution/outputDelta", "item/fileChange/outputDelta",
-                             "item/reasoning/textDelta", "item/reasoning/summaryTextDelta", "turn/diff/updated"]]]])
     }
 
-    private func closeProxy() {
-        proxy = nil
-        writer = nil
-        proxyTask?.cancel()
-        proxyTask = nil
+    private func disconnect() {
+        connectionID = nil
+        connection?.close()
+        connection = nil
+        connectionTask?.cancel()
+        connectionTask = nil
         reads.removeAll()
         let wasReady = ready
         ready = false
-        if wasReady { onConnectionChange?(false) }
+        if wasReady {
+            Logger.activities.notice("agent: codex daemon disconnected")
+            onConnectionChange?(false)
+        }
         for (id, session) in watched where session.runtime != nil && session.runtime != .idle {
             watched[id]?.runtime = nil
             update(.unavailable, from: session)
@@ -210,19 +210,26 @@ final class CodexSessionSource {
         watched.values.contains { $0.hook.kind != .opened && $0.runtime != .idle }
     }
 
-    private func closeIdleProxy() {
-        if proxy != nil, !hasWorkToWatch {
-            closeProxy()
+    /// A session gone idle waits for how its turn ended, which only a read can say.
+    private var awaitsOutcome: Bool {
+        reads.values.contains {
+            guard case .outcome(let id, let generation) = $0 else { return false }
+            return watched[id]?.generation == generation
+        }
+    }
+
+    private func disconnectIfIdle() {
+        if connectionID != nil, !hasWorkToWatch, !awaitsOutcome {
+            disconnect()
             // The next turn can connect immediately.
             lastAttempt = nil
         }
     }
 
     private func send(_ message: [String: Any]) {
-        guard let writer, var data = try? JSONSerialization.data(withJSONObject: message,
-                                                               options: .withoutEscapingSlashes) else { return }
-        data.append(0x0A)
-        do { try writer.write(contentsOf: data) } catch { closeProxy() }
+        guard let connection, let data = try? JSONSerialization.data(withJSONObject: message,
+                                                                    options: .withoutEscapingSlashes) else { return }
+        connection.send(data)
     }
 
     private func request(_ read: Read) {
@@ -248,6 +255,7 @@ final class CodexSessionSource {
                 ready = true
                 send(["method": "initialized"])
                 guard ready else { return }
+                Logger.activities.notice("agent: codex daemon connected")
                 onConnectionChange?(true)
                 for (thread, session) in watched { request(.status(thread, session.generation)) }
             } else if let read = reads.removeValue(forKey: id) {
@@ -269,7 +277,8 @@ final class CodexSessionSource {
     private func receiveRead(_ read: Read, result: [String: Any]?) {
         switch read {
         case .status(let id, let generation):
-            guard let session = watched[id], session.generation == generation, session.runtime == nil,
+            guard let session = watched[id], session.generation == generation,
+                  session.runtime == nil || session.runtime == .approval || session.runtime == .question,
                   let thread = result?["thread"] as? [String: Any],
                   let status = thread["status"] as? [String: Any] else { return }
             receiveStatus(status, id: id, session: session)
@@ -281,7 +290,7 @@ final class CodexSessionSource {
             if watched[id]?.generation == generation {
                 update(.idle, from: session)
                 checkLog(id)
-                closeIdleProxy()
+                disconnectIfIdle()
             }
         }
     }
@@ -306,7 +315,7 @@ final class CodexSessionSource {
                 watched[id]?.runtime = .idle
                 update(.unavailable, from: session)
                 checkLog(id)
-                closeIdleProxy()
+                disconnectIfIdle()
             }
         default: break
         }
@@ -324,7 +333,7 @@ final class CodexSessionSource {
         }
         watched.removeValue(forKey: id)
         update(kind, from: session)
-        closeIdleProxy()
+        disconnectIfIdle()
     }
 
     private func checkLog(_ id: String) {
@@ -341,7 +350,7 @@ final class CodexSessionSource {
             guard watched[id]?.generation == session.generation, let outcome else { return }
             watched.removeValue(forKey: id)
             update(outcome, from: session)
-            closeIdleProxy()
+            disconnectIfIdle()
         }
     }
 

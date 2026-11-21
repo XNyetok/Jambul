@@ -4,6 +4,10 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Fixed
+- Antigravity sessions say Done when a turn finishes, instead of showing it as stopped.
+- Jambul reads Codex session status straight from Codex's background service, instead of starting a Codex process every few seconds while a session works.
+
 ## [0.6.1] - 2026-11-20
 Quieter AI usage beside the notch, and steadier Claude limits and session status.
 

@@ -136,35 +136,32 @@ struct AgentSessionsTests {
         #expect(CodexSessionSource.outcome(at: log, within: folder.appending(path: "other"), turn: "older") == nil)
     }
 
-    @Test func codexProxyUsesTheOwningDaemonsStatusAndResult() async throws {
+    /// The daemon speaks WebSocket over its socket. Jambul read it through `codex app-server proxy` in JSON lines
+    /// before, which the daemon hung up on, so no status ever came from it.
+    @Test func codexDaemonStatusAndResultArriveOverItsWebSocket() async throws {
         let folder = try temporaryFolder()
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let rendezvous = folder.appending(path: "app-server-control/app-server-control.sock")
-        try FileManager.default.createDirectory(at: rendezvous.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data().write(to: rendezvous)
-        let codex = folder.appending(path: "codex")
-        let script = #"""
-            #!/bin/sh
-            while IFS= read -r line; do
-                case "$line" in
-                    *'"initialize"'*) printf '%s\n' '{"id":0,"result":{}}' ;;
-                    *'"thread/read"'*)
-                        printf '%s\n' '{"id":1,"result":{"thread":{"status":{"type":"active","activeFlags":[]}}}}'
-                        printf '%s\n' '{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"active","activeFlags":["waitingOnApproval"]}}}'
-                        printf '%s\n' '{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"active","activeFlags":[]}}}'
-                        printf '%s\n' '{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"active","activeFlags":["waitingOnUserInput"]}}}'
-                        printf '%s\n' '{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"idle"}}}'
-                        ;;
-                    *'"thread/turns/list"'*) printf '%s\n' '{"id":2,"result":{"data":[{"id":"t1","status":"completed"}]}}' ;;
-                    *'"initialized"'*) ;;
-                    *) exit 3 ;;
-                esac
-            done
-            """#
-        try Data(script.utf8).write(to: codex)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: codex.path)
-        let source = CodexSessionSource(home: folder, findCodex: { codex })
+        let daemon = try FakeCodexDaemon(home: folder) { method, id in
+            switch method {
+            case "initialize": [#"{"id":0,"result":{}}"#]
+            case "thread/read": [
+                #"{"id":\#(id ?? -1),"result":{"thread":{"status":{"type":"active","activeFlags":[]}}}}"#,
+                #"{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"active","activeFlags":["waitingOnApproval"]}}}"#,
+                #"{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"active","activeFlags":[]}}}"#,
+                #"{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"active","activeFlags":["waitingOnUserInput"]}}}"#,
+                #"{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"idle"}}}"#,
+            ]
+            case "thread/turns/list": [#"{"id":\#(id ?? -1),"result":{"data":[{"id":"t1","status":"completed"}]}}"#]
+            default: []
+            }
+        }
+        defer {
+            daemon.stop()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        let source = CodexSessionSource(home: folder)
         defer { source.stop() }
+        var connected: [Bool] = []
+        source.onConnectionChange = { connected.append($0) }
         let center = ActivityCenter()
         let agent = AgentActivity(activities: center)
         center.register(agent)
@@ -195,11 +192,154 @@ struct AgentSessionsTests {
         source.receiveHook(update(.codex, .prompted, turn: "t1"))
         try await waitUntil { states.contains(.done) }
         #expect(states == [.prompted, .working, .approval, .working, .question, .idle, .done])
+        #expect(daemon.methods == ["initialize", "initialized", "thread/read", "thread/turns/list"])
+        #expect(connected == [true, false])
+    }
+
+    /// A daemon that doesn't switch to WebSocket leaves the hooks in charge: the turn works on, and nothing says its
+    /// status went missing.
+    @Test func codexHooksCarryOnWhenTheDaemonWontTalk() async throws {
+        let folder = try temporaryFolder()
+        let daemon = try FakeCodexDaemon(home: folder, answersUpgrade: false) { _, _ in [] }
+        defer {
+            daemon.stop()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        let source = CodexSessionSource(home: folder)
+        defer { source.stop() }
+        var states: [AgentSessionUpdate.Kind] = []
+        source.onUpdate = { states.append($0.kind) }
+        source.start()
+        source.receiveHook(update(.codex, .prompted, turn: "t1"))
+        source.receiveHook(update(.codex, .working, turn: "t1"))
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(states == [.prompted, .working])
+        #expect(daemon.methods.isEmpty)
+    }
+
+    /// A daemon that doesn't announce an answered request to Jambul: work going on asks it again, rather than leaving
+    /// "Needs you" up for the rest of the turn.
+    @Test func codexAsksAgainWhenWorkGoesOnPastARequest() async throws {
+        let folder = try temporaryFolder()
+        let reads = ReadCount()
+        let daemon = try FakeCodexDaemon(home: folder) { method, id in
+            switch method {
+            case "initialize": [#"{"id":0,"result":{}}"#]
+            case "thread/read":
+                [reads.next() == 1
+                    ? #"{"id":\#(id ?? -1),"result":{"thread":{"status":{"type":"active","activeFlags":["waitingOnApproval"]}}}}"#
+                    : #"{"id":\#(id ?? -1),"result":{"thread":{"status":{"type":"active","activeFlags":[]}}}}"#]
+            default: []
+            }
+        }
+        defer {
+            daemon.stop()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        let source = CodexSessionSource(home: folder)
+        defer { source.stop() }
+        let agent = AgentActivity(activities: ActivityCenter())
+        var states: [AgentSessionUpdate.Kind] = []
+        source.onUpdate = {
+            agent.receive($0)
+            states.append($0.kind)
+        }
+        source.start()
+        source.receiveHook(update(.codex, .prompted, turn: "t1"))
+        try await waitUntil { agent.liveSession?.needsYou == true }
+        // The model is called again: whatever was asked has been answered.
+        source.receiveHook(update(.codex, .working, turn: "t1", at: .now.addingTimeInterval(1)))
+        try await waitUntil { agent.liveSession?.state == .working }
+        #expect(states == [.prompted, .approval, .working])
+        #expect(daemon.methods == ["initialize", "initialized", "thread/read", "thread/read"])
+    }
+
+    /// A session gone idle keeps the connection until the daemon says how its turn ended, even when another session
+    /// closes meanwhile and leaves nothing else to watch.
+    @Test func codexWaitsForAnOutcomeOnItsWay() async throws {
+        let folder = try temporaryFolder()
+        let daemon = try FakeCodexDaemon(home: folder) { method, id in
+            switch method {
+            case "initialize": return [#"{"id":0,"result":{}}"#]
+            case "thread/read": return [
+                #"{"id":\#(id ?? -1),"result":{"thread":{"status":{"type":"active","activeFlags":[]}}}}"#,
+                #"{"method":"thread/status/changed","params":{"threadId":"same","status":{"type":"idle"}}}"#,
+            ]
+            case "thread/turns/list":
+                // Answered late, after the other session has closed.
+                Thread.sleep(forTimeInterval: 0.3)
+                return [#"{"id":\#(id ?? -1),"result":{"data":[{"id":"t1","status":"completed"}]}}"#]
+            default: return []
+            }
+        }
+        defer {
+            daemon.stop()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        let source = CodexSessionSource(home: folder)
+        defer { source.stop() }
+        var updates: [AgentSessionUpdate] = []
+        source.onUpdate = { updates.append($0) }
+        source.start()
+        source.receiveHook(update(.codex, .prompted, turn: "t1"))
+        try await waitUntil { daemon.methods.contains("thread/turns/list") }
+        // Another session starts and closes before the daemon has said how the first one's turn ended.
+        source.receiveHook(AgentSessionUpdate(provider: .codex, session: "other", kind: .prompted, turn: "o1"))
+        source.receiveHook(AgentSessionUpdate(provider: .codex, session: "other", kind: .closed, turn: "o1",
+                                              date: .now.addingTimeInterval(1)))
+        try await waitUntil { updates.contains { $0.session == "same" && $0.kind == .done } }
+    }
+
+    /// agy 1.5 names how its loop ended by its own reasons, like "NO_TOOL_CALL" for a turn the model finished. Read as
+    /// the "model_stop" of older versions, every finished turn looked stopped, and "Done" never came.
+    @Test func agyStopReasonsSayHowATurnEnded() throws {
+        func ending(_ fields: String) -> AgentSessionUpdate.Kind? {
+            let input = #"{"conversationId":"a","workspacePaths":["/tmp/Jambul"],"hookEventName":"Stop","fullyIdle":true,"#
+                + fields + "}"
+            return AgentSessionUpdate.fromCLI(Data(input.utf8), provider: .antigravity, event: "Stop", terminal: nil,
+                                              date: .now)?.kind
+        }
+        #expect(ending(#""terminationReason":"NO_TOOL_CALL","error":"""#) == .done)
+        #expect(ending(#""terminationReason":"TERMINAL_STEP_TYPE""#) == .done)
+        #expect(ending(#""terminationReason":"model_stop""#) == .done)
+        #expect(ending(#""terminationReason":"USER_CANCELED""#) == .interrupted)
+        // Esc can come with the error of whatever it cut short: still stopped on purpose, not failed.
+        #expect(ending(#""terminationReason":"USER_CANCELED","error":"context canceled""#) == .interrupted)
+        #expect(ending(#""terminationReason":"ERROR","error":"quota exhausted""#) == .failed)
+        #expect(ending(#""terminationReason":"MAX_INVOCATIONS""#) == .failed)
+        #expect(ending(#""terminationReason":"NO_TOOL_CALL","error":"boom""#) == .failed)
+        #expect(ending(#""continuationActive":false"#) == .interrupted)
+    }
+
+    /// From agy's own Stop hook to the peek: a finished turn says "Done".
+    @Test func aFinishedAgyTurnPeeksDone() async throws {
+        let center = ActivityCenter()
+        let agent = AgentActivity(activities: center, frontmostApp: { nil }, completionWindow: .zero)
+        var peeks: [Peek] = []
+        center.onPeek = { peeks.append($0) }
+        let source = AntigravitySessionSource(settle: .milliseconds(10))
+        source.onUpdate = { agent.receive($0) }
+        let started = Date.now
+        func hook(_ event: String, _ fields: String) throws -> AgentSessionUpdate {
+            let input = #"{"conversationId":"a","workspacePaths":["/tmp/Jambul"],"hookEventName":"\#(event)""#
+                + fields + "}"
+            return try #require(AgentSessionUpdate.fromCLI(Data(input.utf8), provider: .antigravity, event: event,
+                                                           terminal: nil, date: started))
+        }
+        source.receive(try hook("PreInvocation", #","invocationNum":1"#))
+        #expect(agent.liveSession?.state == .working)
+        var stop = try hook("Stop", #","terminationReason":"NO_TOOL_CALL","fullyIdle":true"#)
+        stop.date = started.addingTimeInterval(1)
+        source.receive(stop)
+        try await waitUntil { !peeks.isEmpty }
+        #expect(agent.shownSessions.first?.state == .done)
+        #expect(peeks.map(\.title) == ["Done · Antigravity · Jambul"])
     }
 
     private func update(_ provider: UsageProvider, _ kind: AgentSessionUpdate.Kind, turn: String? = nil,
-                        snapshot: Bool = false) -> AgentSessionUpdate {
-        AgentSessionUpdate(provider: provider, session: "same", kind: kind, turn: turn, project: "Jambul", isSnapshot: snapshot)
+                        snapshot: Bool = false, at date: Date = .now) -> AgentSessionUpdate {
+        AgentSessionUpdate(provider: provider, session: "same", kind: kind, turn: turn, project: "Jambul",
+                           isSnapshot: snapshot, date: date)
     }
 
     private func temporaryFolder() throws -> URL {
@@ -212,4 +352,17 @@ struct AgentSessionsTests {
 @MainActor
 private final class SessionTestScreen {
     var isVisible = false
+}
+
+/// Counts reads on the fake daemon's own thread.
+private final class ReadCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func next() -> Int {
+        lock.withLock {
+            count += 1
+            return count
+        }
+    }
 }
