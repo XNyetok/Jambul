@@ -28,7 +28,7 @@ body:
     attributes:
       label: Jambul version
       description: Menu bar bird → About Jambul.
-      placeholder: "0.6.2"
+      placeholder: "0.7.0"
     validations:
       required: true
   - type: input
