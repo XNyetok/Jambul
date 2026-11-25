@@ -17,16 +17,17 @@ Where Jambul is and where it's heading. Plans change as we learn; open an issue 
 
 ## Done
 - **The island:** a living island around the notch, which opens on hover and click, with haptics and Reduce Motion support. It works next to full-screen apps without covering them, and on screens without a notch.
-- **Timer:** 1 to 60 minutes from round quick starts, on a dial whose orange slice shrinks like a kitchen timer's, with the time left beside the notch. It can get +1 minute, be paused or be cancelled. When it ends there's a peek, a sound and a haptic tap, even if the screen was locked or the Mac asleep.
+- **Timer:** 1 to 60 minutes from round quick starts, on a dial whose orange slice shrinks like a kitchen timer's, with the time left beside the notch. It can get +1 minute, be paused or be cancelled. When it ends there's a peek, a sound and haptic taps, even if the screen was locked or the Mac asleep.
 - **Battery:** peeks when the charger is plugged in or out and when the battery is full, plus low-battery warnings at 20% and 5% that wait until someone can see them.
-- **Keep Awake:** keeps the display on until it's turned off, for long downloads, builds or agents. A pair of eyes opens, blinks and falls asleep with it, and how long it has been on shows beside the notch. It turns itself off at 20% battery.
+- **Keep Awake:** keeps the display on until it's turned off, for long downloads, builds or agents. A pair of eyes opens, blinks and falls asleep with it, and how long it has been on shows beside the notch. It turns itself off at 20% battery, or at 5% if it was turned on below that.
 - **Several activities at once:** the most important keeps the right of the compact island, and the others take turns on its left.
 - **Tabs:** the open island shows one feature per tab, split between the two sides of the camera, with one color per feature. In full screen the day and time show below the camera.
 - **Home:** the first tab, with a card for each feature, where the island opens as Jambul starts. After that it opens on the tab you looked at last.
-- **Usage limits:** Claude, Antigravity and Codex limits in a tab with each service's logo, peeks at 80% and 95%, and the island beside the notch from 95% until a limit resets. Jambul gets the numbers from Claude Code's status line and the Antigravity and Codex CLIs.
+- **Usage limits:** Claude and Codex limits in a tab, with peeks at 80% and 95%, when a limit runs out and when it's back. Jambul gets the numbers from Claude Code's status line and the Codex CLI. Automatic Antigravity usage checks are paused.
 - **Coding sessions.** Claude Code, Codex CLI and Antigravity CLI share a Sessions tab and an indicator beside the notch. Peeks show confirmed requests and turn results, and Keep Awake can stay on until the monitored sessions finish.
 - **Motion:** as the island opens, the glyph beside the notch travels to its place in it, and back as it closes. Numbers roll as they change.
-- **Open source:** a public repository with documentation and contribution guides. Every pull request is built, unit-tested and scanned for secrets and personal data. A workflow builds each release and publishes it on GitHub, starting with 0.1.0.
+- **Its own look:** an icon of a crested bird whose eye is the island, in the menu bar and in Finder, and symbols of Jambul's own for the AI tools instead of their logos: C for Claude, `>_` for Codex and A for Antigravity.
+- **Open source:** a public repository with documentation and contribution guides. Every pull request is built, unit-tested and scanned for secrets and personal data. A workflow builds each release and publishes it on GitHub, starting with 0.1.0, and jambul.web.id offers it a few minutes later.
 
 ## Next
 The next feature comes from this list:
