@@ -6,7 +6,7 @@ When code under a permissive license, such as MIT, BSD or Apache-2.0, is adapted
 
 ## Third-party marks and icons
 
-Jambul does not bundle or redistribute third-party logo files. When a supported desktop application is already installed on your Mac, Jambul reads its local application icon from macOS via `NSWorkspace`; otherwise it displays Jambul's own monogram badge.
+Jambul doesn't bundle, redistribute or show third-party logos. It marks each AI tool with a symbol of its own: the tool's initial in a color, or `>_` for Codex.
 
 Third-party product names identify the tools referenced in Jambul and belong to their respective owners. Jambul is an independently developed macOS utility and is not affiliated with, endorsed by, or sponsored by Apple, Anthropic, Google, or OpenAI.
 

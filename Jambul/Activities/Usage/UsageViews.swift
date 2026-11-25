@@ -14,117 +14,84 @@ extension UsageActivity {
     }
 }
 
-/// A provider's local macOS app icon when installed, or Jambul's own squircle glyph badge for CLI-only setups.
-struct UsageLogo: View {
+/// An AI tool's symbol, drawn by Jambul rather than taken from the tool's logo: its initial in its own color, or `>_`
+/// for Codex, the prompt its CLI opens with. Codex has no color of its own, so it takes the text's: white on the island,
+/// black or white in Settings.
+struct ProviderSymbol: View {
     let provider: UsageProvider
     var size: CGFloat
     var onIsland = true
 
     var body: some View {
-        Group {
-            if let appIcon = ProviderIcon.image(for: provider) {
-                Image(nsImage: appIcon)
-                    .resizable()
-                    .interpolation(.high)
-                    .aspectRatio(contentMode: .fit)
-            } else {
-                ProviderBadge(provider: provider, size: size, onIsland: onIsland)
-            }
+        ProviderSymbolShape(provider: provider)
+            .fill(color)
+            .frame(width: size, height: size)
+            .accessibilityElement()
+            .accessibilityLabel(Text(provider.displayName))
+    }
+
+    private var color: AnyShapeStyle {
+        switch provider {
+        case .claude, .antigravity: AnyShapeStyle(provider.brandColor)
+        case .codex: onIsland ? AnyShapeStyle(.white) : AnyShapeStyle(.primary)
         }
-        .frame(width: size, height: size)
-        .accessibilityLabel(Text(provider.displayName))
     }
 }
 
-/// Original macOS-style squircle badge with a clean geometric coding glyph for CLI-only providers.
-private struct ProviderBadge: View {
-    let provider: UsageProvider
-    let size: CGFloat
-    let onIsland: Bool
-
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-    }
-
-    var body: some View {
-        ZStack {
-            shape.fill(backgroundGradient)
-            shape.strokeBorder(borderColor, lineWidth: max(0.5, size * 0.04))
-            glyph
-                .stroke(glyphColor, style: StrokeStyle(lineWidth: max(1.1, size * 0.115), lineCap: .round, lineJoin: .round))
-                .padding(size * 0.23)
-        }
-    }
-
-    private var backgroundGradient: LinearGradient {
-        let colors: [Color] = switch provider {
-        case .claude:
-            [Color(red: 0.90, green: 0.52, blue: 0.39), Color(red: 0.77, green: 0.36, blue: 0.25)]
-        case .antigravity:
-            [Color(red: 0.36, green: 0.60, blue: 0.98), Color(red: 0.18, green: 0.42, blue: 0.90)]
-        case .codex:
-            onIsland
-                ? [Color(white: 0.98), Color(white: 0.86)]
-                : [Color(red: 0.20, green: 0.20, blue: 0.24), Color(red: 0.10, green: 0.10, blue: 0.13)]
-        }
-        return LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
-    }
-
-    private var borderColor: Color {
-        if provider == .codex, onIsland { return .black.opacity(0.12) }
-        return .white.opacity(0.22)
-    }
-
-    private var glyphColor: Color {
-        provider == .codex && onIsland ? Color(white: 0.10) : .white
-    }
-
-    private var glyph: ProviderGlyphShape {
-        ProviderGlyphShape(provider: provider)
-    }
-}
-
-/// Minimal geometric glyphs for each provider, drawn in normalized coordinates so they stay crisp from 12pt to 28pt.
-private struct ProviderGlyphShape: Shape {
+/// The symbol's outline in its square: a capital in SF Pro Rounded Heavy, four fifths as tall as the square, or the
+/// prompt as a thick stroke.
+struct ProviderSymbolShape: Shape {
     let provider: UsageProvider
 
     func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let w = rect.width
-        let h = rect.height
-        let cx = rect.midX
-        let cy = rect.midY
         switch provider {
-        case .claude:
-            // Crisp 6-ray geometric asterisk (3 intersecting lines at 60° intervals).
-            let r = min(w, h) * 0.48
-            for i in 0..<3 {
-                let angle = Double(i) * .pi / 3.0 - .pi / 2.0
-                let dx = CGFloat(cos(angle)) * r
-                let dy = CGFloat(sin(angle)) * r
-                path.move(to: CGPoint(x: cx - dx, y: cy - dy))
-                path.addLine(to: CGPoint(x: cx + dx, y: cy + dy))
-            }
-        case .antigravity:
-            // Ascending chevron with a subtle floating base bar.
-            path.move(to: CGPoint(x: rect.minX + w * 0.14, y: rect.minY + h * 0.68))
-            path.addLine(to: CGPoint(x: cx, y: rect.minY + h * 0.14))
-            path.addLine(to: CGPoint(x: rect.maxX - w * 0.14, y: rect.minY + h * 0.68))
-            path.move(to: CGPoint(x: rect.minX + w * 0.30, y: rect.minY + h * 0.88))
-            path.addLine(to: CGPoint(x: rect.maxX - w * 0.30, y: rect.minY + h * 0.88))
-        case .codex:
-            // Classic terminal prompt `>_`.
-            path.move(to: CGPoint(x: rect.minX + w * 0.12, y: rect.minY + h * 0.22))
-            path.addLine(to: CGPoint(x: rect.minX + w * 0.46, y: cy))
-            path.addLine(to: CGPoint(x: rect.minX + w * 0.12, y: rect.maxY - h * 0.22))
-            path.move(to: CGPoint(x: rect.minX + w * 0.56, y: rect.maxY - h * 0.22))
-            path.addLine(to: CGPoint(x: rect.maxX - w * 0.08, y: rect.maxY - h * 0.22))
+        case .claude: Self.initial(Self.c, in: rect)
+        case .antigravity: Self.initial(Self.a, in: rect)
+        case .codex: Self.prompt(in: rect)
         }
-        return path
+    }
+
+    private static let c = outline(of: "C")
+    private static let a = outline(of: "A")
+
+    /// A capital's outline at 100 pt from the system's rounded face, flipped so y grows downward.
+    private static func outline(of character: String) -> Path {
+        let base = NSFont.systemFont(ofSize: 100, weight: .heavy)
+        let font = base.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: 100) } ?? base
+        var characters = Array(character.utf16)
+        var glyphs = [CGGlyph](repeating: 0, count: characters.count)
+        guard CTFontGetGlyphsForCharacters(font, &characters, &glyphs, characters.count),
+              let glyph = CTFontCreatePathForGlyph(font, glyphs[0], nil) else { return Path() }
+        return Path(glyph).applying(CGAffineTransform(scaleX: 1, y: -1))
+    }
+
+    /// The capital centered in `rect` by its own outline, not its line box, so C and A sit alike.
+    private static func initial(_ outline: Path, in rect: CGRect) -> Path {
+        let bounds = outline.boundingRect
+        guard bounds.height > 0 else { return Path() }
+        let scale = rect.height * 0.8 / bounds.height
+        return outline
+            .applying(CGAffineTransform(translationX: -bounds.midX, y: -bounds.midY))
+            .applying(CGAffineTransform(scaleX: scale, y: scale))
+            .applying(CGAffineTransform(translationX: rect.midX, y: rect.midY))
+    }
+
+    /// `>_` on a grid of 100: a chevron and an underscore, the stroke 13 wide.
+    private static func prompt(in rect: CGRect) -> Path {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + rect.width * x / 100, y: rect.minY + rect.height * y / 100)
+        }
+        var path = Path()
+        path.move(to: point(14, 25))
+        path.addLine(to: point(45, 50))
+        path.addLine(to: point(14, 75))
+        path.move(to: point(55, 75))
+        path.addLine(to: point(88, 75))
+        return path.strokedPath(StrokeStyle(lineWidth: rect.height * 0.13, lineCap: .round, lineJoin: .round))
     }
 }
 
-/// The usage limits' card on Home: each subscription the owner turned on, with its logo and its fullest limit, yellow
+/// The usage limits' card on Home: each subscription the owner turned on, with its symbol and its fullest limit, yellow
 /// from 80% and red from 95% as on the tab. Three leave no room for the card's name, which gives way to them, as the
 /// tab's large numbers do. Like the tab, it asks for numbers that are old as it appears.
 private struct UsageHomeCard: View {
@@ -137,7 +104,7 @@ private struct UsageHomeCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(providers, id: \.self) { provider in
                     HStack(spacing: 6) {
-                        UsageLogo(provider: provider, size: 14)
+                        ProviderSymbol(provider: provider, size: 14)
                         percent(provider, now: now)
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .monospacedDigit()
@@ -169,7 +136,7 @@ private struct UsageHomeCard: View {
     }
 }
 
-/// One column per subscription the owner turned on: its logo, its name and when it starts over, its fullest limit in
+/// One column per subscription the owner turned on: its symbol, its name and when it starts over, its fullest limit in
 /// large type, and a bar for each limit.
 struct UsageTab: View {
     let activity: UsageActivity
@@ -267,10 +234,10 @@ private struct UsageColumn: View {
             .sorted { $0.label < $1.label }
     }
 
-    /// The provider icon popping in, with a subtle activity ring around it while Claude Code works.
+    /// The symbol popping in, with a ring turning around Claude's while Claude Code works.
     private var logo: some View {
         ZStack {
-            UsageLogo(provider: provider, size: 28)
+            ProviderSymbol(provider: provider, size: 28)
             if provider == .claude, activity.isClaudeWorking {
                 Circle()
                     .trim(from: 0, to: 0.3)

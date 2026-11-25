@@ -6,8 +6,10 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ### Changed
 - Paused automatic Antigravity usage checks via headless `agy -p`; Antigravity coding sessions remain available.
-- Removed bundled third-party AI provider logos; Jambul now reads locally installed macOS app icons when available and falls back to monogram badges.
-- Replaced the menu bar icon with Jambul's own `[ / ]` mark.
+- AI tools are marked with Jambul's own symbols instead of their logos: C for Claude, >_ for Codex and A for Antigravity.
+- When a coding session needs you, its tool's symbol stays left of the notch and a raised hand replaces the time on the right.
+- The About window says Jambul isn't affiliated with Apple, Anthropic, Google or OpenAI.
+- Jambul has its own icon in the menu bar and in Finder: a crested bird whose eye is the island.
 - Release archives now include `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 
 ### Fixed

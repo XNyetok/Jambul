@@ -150,7 +150,7 @@ struct AIToolsSettingsView: View {
                     }
                 } header: {
                     HStack(spacing: 8) {
-                        UsageLogo(provider: provider, size: 16, onIsland: false)
+                        ProviderSymbol(provider: provider, size: 16, onIsland: false)
                         Text(provider.displayName)
                     }
                 } footer: {

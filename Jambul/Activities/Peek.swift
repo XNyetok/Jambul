@@ -21,9 +21,9 @@ struct Peek: Identifiable, Equatable {
     /// What the news is about within its activity, like one of several agent sessions. A newer peek replaces only one on
     /// the same topic, and taking peeks back can name one.
     var topic: String?
-    /// A provider icon shown in place of `symbol`, resolved from a local app or Jambul's monogram badge.
+    /// An AI tool's symbol shown in place of `symbol`.
     var logo: UsageProvider?
-    /// Provider badges that make up the icon for `complete`: the sessions that finished, up to three.
+    /// The AI tools' symbols that make up the icon for `complete`: the sessions that finished, up to three.
     var logos: [PeekLogo] = []
     /// How full something is, from 0 to 1, drawn as a thin bar under the message in `tint`.
     var progress: Double?
@@ -46,7 +46,7 @@ extension Peek {
     }
 }
 
-/// A provider badge in a peek's icon, with the name VoiceOver reads for it.
+/// An AI tool's symbol in a peek's icon, with the name VoiceOver reads for it.
 struct PeekLogo: Equatable {
     var provider: UsageProvider
     var name: String
