@@ -4,12 +4,15 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-25
+Jambul gets its own icon and its own symbols for AI tools, and stops checking Antigravity usage.
+
 ### Changed
-- Paused automatic Antigravity usage checks via headless `agy -p`; Antigravity coding sessions remain available.
+- Jambul has its own icon in the menu bar and in Finder: a crested bird whose eye is the island.
 - AI tools are marked with Jambul's own symbols instead of their logos: C for Claude, >_ for Codex and A for Antigravity.
 - When a coding session needs you, its tool's symbol stays left of the notch and a raised hand replaces the time on the right.
+- Paused automatic Antigravity usage checks via headless `agy -p`; Antigravity coding sessions remain available.
 - The About window says Jambul isn't affiliated with Apple, Anthropic, Google or OpenAI.
-- Jambul has its own icon in the menu bar and in Finder: a crested bird whose eye is the island.
 - Release archives now include `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 
 ### Fixed
@@ -117,7 +120,8 @@ The first public release.
 - Day and time beside the notch while a full-screen app hides the menu bar, written as the locale writes them and shortened where a 12-hour clock needs the room, and an option to hide the island in full screen.
 - Settings: open at login, hover speed, haptic taps and the timer's sound.
 
-[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/XNyetok/Jambul/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/XNyetok/Jambul/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/XNyetok/Jambul/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/XNyetok/Jambul/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/XNyetok/Jambul/compare/v0.5.1...v0.6.0
