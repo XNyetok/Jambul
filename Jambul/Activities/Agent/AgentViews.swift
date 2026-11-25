@@ -1,7 +1,7 @@
 import SwiftUI
 
 extension AgentActivity {
-    /// A single group beside the notch, with the provider of its most pressing session.
+    /// A single group beside the notch: the symbol of its most pressing session's tool, and how many others there are.
     var compactLeading: some View {
         AgentCompactGlyph(session: liveSession, count: activeCount)
     }
@@ -22,14 +22,8 @@ struct AgentCompactGlyph: View {
     var body: some View {
         if let session {
             HStack(spacing: 3) {
-                if session.needsYou {
-                    Image(systemName: "chevron.left.forwardslash.chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: IslandLayout.compactGlyphHeight)
-                } else {
-                    UsageLogo(provider: session.provider, size: IslandLayout.compactGlyphHeight)
-                }
-                if !session.needsYou, count > 1 {
+                ProviderSymbol(provider: session.provider, size: IslandLayout.compactGlyphHeight)
+                if count > 1 {
                     Text("+\(min(count - 1, 99))").font(.system(size: 10, weight: .semibold))
                 }
             }
@@ -45,18 +39,10 @@ private struct AgentCompactValue: View {
     var body: some View {
         if let session = activity.liveSession {
             if case .needsYou(let question) = session.state {
-                HStack(spacing: 4) {
-                    UsageLogo(provider: session.provider, size: 14)
-                    Image(systemName: question ? "questionmark.bubble.fill" : "hand.raised.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.yellow)
-                    if activity.activeCount > 1 {
-                        Text("+\(min(activity.activeCount - 1, 99))")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(Text("\(session.provider.sessionName) needs you"))
+                Image(systemName: question ? "questionmark.bubble.fill" : "hand.raised.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.yellow)
+                    .accessibilityLabel(Text("\(session.provider.sessionName) needs you"))
             } else if let started = session.turnStartedAt {
                 // Once a minute, and only while someone can see it. A second past each whole minute, so the minute
                 // rounded up has turned over.
@@ -243,7 +229,7 @@ private struct AgentRow: View {
                 .islandGlyph(AgentActivity.glyph(of: session))
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    UsageLogo(provider: session.provider, size: 12)
+                    ProviderSymbol(provider: session.provider, size: 12)
                     Text(session.project)
                         .font(.system(size: 13, weight: .semibold))
                         .layoutPriority(1)

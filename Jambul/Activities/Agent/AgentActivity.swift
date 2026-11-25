@@ -96,10 +96,10 @@ final class AgentActivity: IslandActivity {
     var title: String { String(localized: "Sessions") }
     var tint: Color { liveSession?.provider.brandColor ?? .white }
     var tabSymbol: String { "chevron.left.forwardslash.chevron.right" }
-    /// Its logo.
+    /// Its tool's symbol and the count of other sessions.
     var compactLeadingWidth: CGFloat { IslandLayout.compactGlyphHeight + 22 }
     var compactSlotWidth: CGFloat { 59 }
-    /// The session beside the notch, whose circle the tab and the card on Home show: the logo travels to it.
+    /// The session beside the notch, whose circle the tab and the card on Home show: the symbol travels to it.
     var compactGlyph: String? { liveSession.map(Self.glyph) }
 
     static func glyph(of session: AgentSession) -> String { "agent.\(session.id)" }
@@ -403,7 +403,7 @@ final class AgentActivity: IslandActivity {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
-    /// A session's client, as its badge in a peek.
+    /// A session's client, as its symbol in a peek.
     static func logo(_ session: AgentSession) -> PeekLogo {
         PeekLogo(provider: session.provider, name: session.provider.sessionName)
     }

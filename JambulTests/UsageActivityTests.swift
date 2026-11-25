@@ -328,34 +328,17 @@ struct UsageActivityTests {
         #expect(upgraded.usageProviders == [.claude])
     }
 
-    @Test func providerIconResolvesLocalAppAndFallsBackToNil() {
-        let sample = NSImage(size: NSSize(width: 16, height: 16))
-        var lookedUpPaths: [String] = []
-        let byBundle = ProviderIcon.resolve(
-            for: .claude,
-            urlForBundleID: { $0 == "com.anthropic.claudefordesktop" ? URL(filePath: "/Applications/Claude.app") : nil },
-            fileExists: { _ in false },
-            iconForFile: { path in lookedUpPaths.append(path); return sample }
-        )
-        #expect(byBundle === sample)
-        #expect(lookedUpPaths == ["/Applications/Claude.app"])
-
-        let byPath = ProviderIcon.resolve(
-            for: .codex,
-            urlForBundleID: { _ in nil },
-            fileExists: { $0 == "/Applications/Codex.app" },
-            iconForFile: { path in lookedUpPaths.append(path); return sample }
-        )
-        #expect(byPath === sample)
-        #expect(lookedUpPaths.last == "/Applications/Codex.app")
-
-        let missing = ProviderIcon.resolve(
-            for: .antigravity,
-            urlForBundleID: { _ in nil },
-            fileExists: { _ in false },
-            iconForFile: { _ in sample }
-        )
-        #expect(missing == nil)
+    /// Each AI tool's symbol fills most of its square without spilling out, and no two are alike. The capitals come
+    /// from the system font at run time, so a failed lookup would leave a tool without one.
+    @Test func everyToolHasItsOwnSymbol() {
+        let square = CGRect(x: 0, y: 0, width: 16, height: 16)
+        let outlines = UsageProvider.allCases.map { ProviderSymbolShape(provider: $0).path(in: square) }
+        for outline in outlines {
+            let bounds = outline.boundingRect
+            #expect(bounds.height > square.height * 0.6)
+            #expect(square.insetBy(dx: -0.5, dy: -0.5).contains(bounds))
+        }
+        #expect(Set(outlines.map(\.description)).count == outlines.count)
     }
 }
 

@@ -1,6 +1,6 @@
 # Architecture
 
-Jambul is a background app (no Dock icon) that draws a Dynamic Island–style island around the MacBook notch. AppKit owns the app's lifecycle and windows; SwiftUI draws the island. This page explains how the pieces fit and why they're built the way they are.
+Jambul is a background app (no Dock icon) that draws an island around the MacBook notch. AppKit owns the app's lifecycle and windows; SwiftUI draws the island. This page explains how the pieces fit and why they're built the way they are.
 
 ## Windows and the pointer
 - AppKit owns lifecycle and windows (`App/main.swift`, `AppDelegate`, `IslandPanel`); SwiftUI draws the island inside them.
@@ -43,10 +43,10 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 - Each warning is recorded only once the island has shown its peek (`ActivityCenter.peekWasShown`), so a peek nobody saw is asked for again. A window is told from the next by its reset time, and times within 30 minutes count as the same window, since a provider can move it a little between readings. Each Claude Code session repeats the limits it last heard, for hours if it sits idle, so within a window only a session that just made a request changes Claude's numbers. Two sessions at work can be a point apart, so a number only drops once it is lower by more than two points: a provider can hand usage back before the window ends. A drop from another session is held until another session or a later reading confirms it, so a session finishing a long request with older limits cannot briefly pull the percentage down.
 - Nothing polls. Each source waits for something to happen:
   - **Claude:** Claude Code's status line becomes a short shell line that hands its input to `InputSocket`, a Unix socket in a folder only the owner can open, with macOS's own `nc`, then runs the owner's status line unchanged (`ClaudeStatusLineInstaller`). It names no path into Jambul, so moving or deleting Jambul breaks nothing.
-  - **Antigravity:** `agy -p /usage --output-format json` (about 6 s), once as Jambul starts or Antigravity is turned on, then when the Usage tab or Home opens with numbers older than 5 minutes, when the Mac wakes, and while agy writes its log (FSEvents), at most once per 5 minutes. Its output goes to a file, and a run that hangs is stopped after 30 s, killed if it must. A run that fails is tried once more as soon as the Mac is online (`OnlineWait`): right after login the network isn't up yet, and agy then waits for a sign-in.
+  - **Antigravity:** paused. Its source (`AntigravityUsageSource`, which ran `agy -p /usage --output-format json`) is kept but never started: Google doesn't support wrapping `agy -p` in third-party apps on consumer plans.
   - **Codex** uses the CLI’s App Server to read the account limits at launch, on wake and when Home or Usage opens, at most once a minute. An unsuccessful read gets one retry when the Mac is online. FSEvents also brings in new quota events from local sessions, dated by the event itself when available.
 - One wait at a time, for the next limit to start over.
-- The logos are their owners' trademarks (see `THIRD_PARTY_NOTICES.md`). Every usage motion plays once, except Claude's logo while Claude Code works: it turns one ray on a 2 s beat, holding still in between, and only while the open island shows it. Claude Code also sends its status line on a timer, so "working" means a session's request time grew in the last 20 s.
+- Each AI tool has a symbol of Jambul's own rather than its logo (`ProviderSymbol`): its initial in its color, or `>_` for Codex. Every usage motion plays once, except the ring around Claude's symbol while Claude Code works: it turns a step on a 2 s beat, holding still in between, and only while the open island shows it. Claude Code also sends its status line on a timer, so "working" means a session's request time grew in the last 20 s.
 
 ## Coding sessions
 
@@ -56,7 +56,7 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 - `CodexSessionSource` reads status from Codex's local app-server daemon, speaking WebSocket on its socket itself: `codex app-server proxy` only relays bytes, and starting it cost a process per attempt. `CodexControlConnection` reads, writes and passes over messages too long to keep on a queue of its own, so a long one can't crowd out the rest while the main actor is busy. A request the daemon may not announce the answer to is read again once work goes on. It matches status and terminal outcomes to the observed thread and turn. If a local rollout is available, it can recognize the same turn's terminal event after a file change. A bare `Stop` hook is provisional.
 - `AntigravitySessionSource` combines the lifecycle hooks with `agy` snapshots. Once the status line has reported for a session, Jambul waits for an idle snapshot to confirm its terminal hook. The confirmation flag in a snapshot is the source of a pending permission. agy's Stop hook names how the turn ended by agy's own reasons, like `NO_TOOL_CALL` for one the model finished.
 - The notification queue gives timer completions and low-battery warnings precedence among waiting peeks. A response withdraws the corresponding request, and completions within a short window share a peek.
-- A finished turn's peek names its project, with its client's logo in a ring that closes from where the working ring's arc ends before a check pops onto it (`PeekCompletionBadge`). Its second line is the agent's last words, what it changed, or else the client's name, so Codex and Antigravity, which hand over no reply, read the same.
+- A finished turn's peek names its project, with its client's symbol in a ring that closes from where the working ring's arc ends before a check pops onto it (`PeekCompletionBadge`). Its second line is the agent's last words, what it changed, or else the client's name, so Codex and Antigravity, which hand over no reply, read the same.
 
 ### Claude Code
 
@@ -66,7 +66,7 @@ Hover opens the island after a short intent delay, leaving closes it, and a clic
 - `AgentActivity` keeps each session in memory: working, waiting on the owner (a permission or a question), done, failed or stopped. It sits beside the notch while a session works, ahead of everything else while one waits on the owner.
 - Claude Code runs no hook when a turn is stopped with Esc. A session quiet mid-turn has the end of its transcript read a minute later, and every few minutes while it stays quiet; Esc leaves "[Request interrupted by user" there. A working session quiet in its hooks and its transcript for 20 minutes counts as stopped. A session waiting on the owner never goes stale.
 - "Needs you" must be seen, and open requests are tracked per `agent_id` so parallel subagents do not clear a pending question or permission before it is answered in the terminal. "Done" stays quiet for a turn under a minute that the owner watched in its terminal, and queues behind peeks that must be seen.
-- In the open island a working session's ring turns a step every 2 s, on the beat Claude's logo steps on (`Motion.Usage.untilNextBeat`).
+- In the open island a working session's ring turns a step every 2 s, on the beat the ring around Claude's symbol steps on (`Motion.Usage.untilNextBeat`).
 - Nothing about sessions is saved; the log only records changes of state, never what an agent said or which files it touched.
 
 ## Sleep

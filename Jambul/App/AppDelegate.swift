@@ -343,7 +343,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showAbout() {
         NSApp.activate()
-        NSApp.orderFrontStandardAboutPanel(nil)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: Self.aboutNote])
+    }
+
+    /// Jambul names other companies' tools, and the About panel says it belongs to none of them.
+    private static var aboutNote: NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        return NSAttributedString(
+            string: String(localized: "Jambul is developed independently and isn’t affiliated with, endorsed by or sponsored by Apple, Anthropic, Google or OpenAI."),
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: paragraph,
+            ])
     }
 
     #if DEBUG

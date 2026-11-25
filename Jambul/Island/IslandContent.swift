@@ -139,7 +139,7 @@ private struct PeekIcon: View {
         } else if let closing = peek.motion.eyesClosing {
             PeekEyes(tint: peek.tint, closing: closing)
         } else if let provider = peek.logo {
-            UsageLogo(provider: provider, size: 18)
+            ProviderSymbol(provider: provider, size: 18)
         } else {
             Image(systemName: peek.symbol)
                 .font(.system(size: 17, weight: .semibold))
@@ -309,7 +309,7 @@ struct PeekCompletionBadge: View {
     }
 
     private func logoImage(_ logo: PeekLogo, index: Int, size: CGFloat = logoSize) -> some View {
-        UsageLogo(provider: logo.provider, size: size)
+        ProviderSymbol(provider: logo.provider, size: size)
             .scaleEffect(Motion.Agent.logoFrom + (1 - Motion.Agent.logoFrom) * progress)
             .opacity(0.4 + 0.6 * progress)
             .animation(Motion.Agent.logoArrive(index), value: progress)
