@@ -74,7 +74,11 @@ jobs:
             exit 1
           fi
           codesign --verify --deep --strict "$app"
-          ditto -c -k --keepParent "$app" "Jambul-$VERSION.zip"
+          stage=$(mktemp -d)
+          ditto "$app" "$stage/Jambul.app"
+          cp LICENSE THIRD_PARTY_NOTICES.md "$stage/"
+          ditto -c -k "$stage" "Jambul-$VERSION.zip"
+          rm -rf "$stage"
           shasum -a 256 "Jambul-$VERSION.zip" > "Jambul-$VERSION.zip.sha256"
           awk -v heading="## [$VERSION]" 'index($0, heading) == 1 { on = 1; next } on && /^## \[/ { exit } on' \
             CHANGELOG.md > notes.md
@@ -94,7 +98,7 @@ jobs:
             echo "**Install:** download \`Jambul-$VERSION.zip\`, unzip it and move \`Jambul.app\` to Applications" \
               "(macOS ${minimum%.0} or later). Jambul isn't notarized by Apple yet, so macOS refuses to open it" \
               "the first time: go to System Settings → Privacy & Security, find the message about Jambul, and" \
-              "choose **Open Anyway**. Once open, Jambul lives in the notch and in the menu bar (the bird icon)," \
+              "choose **Open Anyway**. Once open, Jambul lives in the notch and in the menu bar," \
               "not in the Dock. More in the README's" \
               "[Install]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#install) section."
           } >> notes.md

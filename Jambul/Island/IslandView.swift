@@ -138,7 +138,7 @@ private struct IslandPreview: View {
 
 #Preview("Done Peek") {
     let peek = Peek(symbol: "checkmark.circle.fill", tint: UsageProvider.claude.brandColor, title: "Done · Jambul",
-                    detail: "4m 12s", subtitle: "All tests pass", logos: [PeekLogo(asset: "ClaudeLogo", name: "Claude Code")],
+                    detail: "4m 12s", subtitle: "All tests pass", logos: [PeekLogo(provider: .claude, name: "Claude Code")],
                     emphasis: "Done", motion: .complete)
     return IslandPreview(model: IslandModel(notch: previewNotch, activities: ActivityCenter(),
                                             presentation: .peek, peek: peek))

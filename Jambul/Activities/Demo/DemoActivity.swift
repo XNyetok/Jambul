@@ -11,8 +11,10 @@ final class DemoActivity: IslandActivity {
     var compactSlotWidth: CGFloat { 44 }
 
     var compactLeading: some View {
-        Image(systemName: "bird.fill")
-            .font(.system(size: 14, weight: .semibold))
+        Image("JambulMenuBarIcon")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 14, height: 14)
             .foregroundStyle(.orange)
     }
 

@@ -134,6 +134,7 @@ struct AIToolsSettingsView: View {
                         SettingsLabel("Usage limits", symbol: "gauge.with.dots.needle.33percent",
                                       detail: Text(status(provider)))
                     }
+                    .disabled(!provider.supportsUsageLimits)
                     if provider == .claude, needsConnectingClaude {
                         LabeledContent("Claude’s limits arrive once its status line is connected.") {
                             Button("Connect…") {
@@ -154,7 +155,7 @@ struct AIToolsSettingsView: View {
                     }
                 } footer: {
                     if provider == Self.tools.last {
-                        Text("Coding sessions show when an agent works, needs you or is done, and let Keep Awake stay on until it finishes. Jambul doesn’t use the internet; Antigravity’s numbers come from agy, which asks Google.")
+                        Text("Coding sessions show when an agent works, needs you or is done, and let Keep Awake stay on until it finishes. Jambul itself makes no network connections; Codex usage comes from the local Codex CLI.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -244,10 +245,13 @@ extension AIToolsSettingsView {
     }
 
     private func status(_ provider: UsageProvider) -> String {
+        guard provider.supportsUsageLimits else {
+            return String(localized: "Paused · headless agy usage checks are disabled")
+        }
         guard isOn(provider).wrappedValue else {
             return switch provider {
             case .claude: String(localized: "Off · reads Claude Code’s status line")
-            case .antigravity: String(localized: "Off · asks agy for its usage report")
+            case .antigravity: String(localized: "Paused · headless agy usage checks are disabled")
             case .codex: String(localized: "Off · asks the Codex CLI for account usage")
             }
         }

@@ -45,7 +45,14 @@ final class Preferences {
 
     /// The subscriptions whose usage limits the island shows.
     var usageProviders: Set<UsageProvider> {
-        didSet { save(usageProviders.map(\.rawValue).sorted(), for: .usageProviders) }
+        didSet {
+            let allowed = usageProviders.filter(\.supportsUsageLimits)
+            if allowed != usageProviders {
+                usageProviders = allowed
+                return
+            }
+            save(allowed.map(\.rawValue).sorted(), for: .usageProviders)
+        }
     }
 
     /// Whether the owner agreed to connect Claude Code's status line, which changes Claude Code's settings. Claude's
@@ -76,7 +83,7 @@ final class Preferences {
         default: Self.defaultTimerSound
         }
         usageProviders = (defaults.stringArray(forKey: Key.usageProviders.rawValue))
-            .map { Set($0.compactMap(UsageProvider.init(rawValue:))) }
+            .map { Set($0.compactMap(UsageProvider.init(rawValue:)).filter(\.supportsUsageLimits)) }
             ?? Set(UsageProvider.allCases.filter(\.isOnByDefault))
         claudeStatusLineAgreed = defaults.bool(forKey: Key.claudeStatusLineAgreed.rawValue)
         agentProviders = defaults.stringArray(forKey: Key.agentProviders.rawValue)

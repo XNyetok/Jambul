@@ -267,20 +267,20 @@ final class UsageActivity: IslandActivity {
         case .warning80:
             return Peek(symbol: "gauge.with.dots.needle.67percent", tint: .yellow, title: "\(name) \(percent)",
                         detail: resets, duration: warningPeekDuration, source: source,
-                        logo: alert.provider.logoAsset, progress: alert.used, emphasis: percent, motion: .spin)
+                        logo: alert.provider, progress: alert.used, emphasis: percent, motion: .spin)
         case .warning95:
             return Peek(symbol: "gauge.with.dots.needle.100percent", tint: .red, title: "\(name) \(percent)",
                         detail: resets, duration: urgentPeekDuration, mustBeSeen: true, source: source,
-                        logo: alert.provider.logoAsset, progress: alert.used, emphasis: percent, motion: .pulse)
+                        logo: alert.provider, progress: alert.used, emphasis: percent, motion: .pulse)
         case .out:
             let back = alert.resetsAt.map { backText($0, now: now) }
             return Peek(symbol: "gauge.with.dots.needle.100percent", tint: .red,
                         title: String(localized: "\(name) is out"), detail: back, duration: urgentPeekDuration,
-                        mustBeSeen: true, source: source, logo: alert.provider.logoAsset, progress: 1, motion: .sleep)
+                        mustBeSeen: true, source: source, logo: alert.provider, progress: 1, motion: .sleep)
         case .back:
             return Peek(symbol: "gauge.with.dots.needle.0percent", tint: alert.provider.brandColor,
                         title: String(localized: "\(name) is back"), detail: String(localized: "limit reset"),
-                        duration: warningPeekDuration, source: source, logo: alert.provider.logoAsset, progress: 0,
+                        duration: warningPeekDuration, source: source, logo: alert.provider, progress: 0,
                         motion: .bounce)
         }
     }
@@ -339,16 +339,7 @@ final class UsageActivity: IslandActivity {
 }
 
 extension UsageProvider {
-    /// The provider's own logo, in the app's assets.
-    var logoAsset: String {
-        switch self {
-        case .claude: "ClaudeLogo"
-        case .antigravity: "AntigravityLogo"
-        case .codex: "OpenAILogo"
-        }
-    }
-
-    /// Its bars' color while there is room: the color of its logo.
+    /// Its bars' accent color while there is room.
     var brandColor: Color {
         switch self {
         case .claude: Color(red: 0.851, green: 0.467, blue: 0.341)

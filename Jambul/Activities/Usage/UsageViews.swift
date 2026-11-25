@@ -14,22 +14,113 @@ extension UsageActivity {
     }
 }
 
-/// A subscription's logo, which no color or shape of Jambul's changes. OpenAI's comes in black or white, so it takes the
-/// color of the text around it: white on the island, black in a light Settings window.
+/// A provider's local macOS app icon when installed, or Jambul's own squircle glyph badge for CLI-only setups.
 struct UsageLogo: View {
     let provider: UsageProvider
     var size: CGFloat
     var onIsland = true
 
     var body: some View {
-        Image(provider.logoAsset)
-            .resizable()
-            .renderingMode(provider == .codex ? .template : .original)
-            .interpolation(.high)
-            .aspectRatio(contentMode: .fit)
-            .foregroundStyle(onIsland ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-            .frame(width: size, height: size)
-            .accessibilityLabel(Text(provider.displayName))
+        Group {
+            if let appIcon = ProviderIcon.image(for: provider) {
+                Image(nsImage: appIcon)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                ProviderBadge(provider: provider, size: size, onIsland: onIsland)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel(Text(provider.displayName))
+    }
+}
+
+/// Original macOS-style squircle badge with a clean geometric coding glyph for CLI-only providers.
+private struct ProviderBadge: View {
+    let provider: UsageProvider
+    let size: CGFloat
+    let onIsland: Bool
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+    }
+
+    var body: some View {
+        ZStack {
+            shape.fill(backgroundGradient)
+            shape.strokeBorder(borderColor, lineWidth: max(0.5, size * 0.04))
+            glyph
+                .stroke(glyphColor, style: StrokeStyle(lineWidth: max(1.1, size * 0.115), lineCap: .round, lineJoin: .round))
+                .padding(size * 0.23)
+        }
+    }
+
+    private var backgroundGradient: LinearGradient {
+        let colors: [Color] = switch provider {
+        case .claude:
+            [Color(red: 0.90, green: 0.52, blue: 0.39), Color(red: 0.77, green: 0.36, blue: 0.25)]
+        case .antigravity:
+            [Color(red: 0.36, green: 0.60, blue: 0.98), Color(red: 0.18, green: 0.42, blue: 0.90)]
+        case .codex:
+            onIsland
+                ? [Color(white: 0.98), Color(white: 0.86)]
+                : [Color(red: 0.20, green: 0.20, blue: 0.24), Color(red: 0.10, green: 0.10, blue: 0.13)]
+        }
+        return LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
+    }
+
+    private var borderColor: Color {
+        if provider == .codex, onIsland { return .black.opacity(0.12) }
+        return .white.opacity(0.22)
+    }
+
+    private var glyphColor: Color {
+        provider == .codex && onIsland ? Color(white: 0.10) : .white
+    }
+
+    private var glyph: ProviderGlyphShape {
+        ProviderGlyphShape(provider: provider)
+    }
+}
+
+/// Minimal geometric glyphs for each provider, drawn in normalized coordinates so they stay crisp from 12pt to 28pt.
+private struct ProviderGlyphShape: Shape {
+    let provider: UsageProvider
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        let cx = rect.midX
+        let cy = rect.midY
+        switch provider {
+        case .claude:
+            // Crisp 6-ray geometric asterisk (3 intersecting lines at 60° intervals).
+            let r = min(w, h) * 0.48
+            for i in 0..<3 {
+                let angle = Double(i) * .pi / 3.0 - .pi / 2.0
+                let dx = CGFloat(cos(angle)) * r
+                let dy = CGFloat(sin(angle)) * r
+                path.move(to: CGPoint(x: cx - dx, y: cy - dy))
+                path.addLine(to: CGPoint(x: cx + dx, y: cy + dy))
+            }
+        case .antigravity:
+            // Ascending chevron with a subtle floating base bar.
+            path.move(to: CGPoint(x: rect.minX + w * 0.14, y: rect.minY + h * 0.68))
+            path.addLine(to: CGPoint(x: cx, y: rect.minY + h * 0.14))
+            path.addLine(to: CGPoint(x: rect.maxX - w * 0.14, y: rect.minY + h * 0.68))
+            path.move(to: CGPoint(x: rect.minX + w * 0.30, y: rect.minY + h * 0.88))
+            path.addLine(to: CGPoint(x: rect.maxX - w * 0.30, y: rect.minY + h * 0.88))
+        case .codex:
+            // Classic terminal prompt `>_`.
+            path.move(to: CGPoint(x: rect.minX + w * 0.12, y: rect.minY + h * 0.22))
+            path.addLine(to: CGPoint(x: rect.minX + w * 0.46, y: cy))
+            path.addLine(to: CGPoint(x: rect.minX + w * 0.12, y: rect.maxY - h * 0.22))
+            path.move(to: CGPoint(x: rect.minX + w * 0.56, y: rect.maxY - h * 0.22))
+            path.addLine(to: CGPoint(x: rect.maxX - w * 0.08, y: rect.maxY - h * 0.22))
+        }
+        return path
     }
 }
 
@@ -176,20 +267,20 @@ private struct UsageColumn: View {
             .sorted { $0.label < $1.label }
     }
 
-    /// The logo popping in. Antigravity's also rises past its place and settles, on an animation of its own that
-    /// touches only the rise, so the pop reaches every logo.
+    /// The provider icon popping in, with a subtle activity ring around it while Claude Code works.
     private var logo: some View {
-        UsageLogo(provider: provider, size: 28)
-            .offset(y: provider == .antigravity && !appeared && !reduceMotion ? Motion.Usage.floatFrom : 0)
-            .animation(provider == .antigravity ? Motion.Usage.float.delay(stagger) : nil, value: appeared)
-            .rotationEffect(.degrees(logoTurn))
-            .scaleEffect(appeared || reduceMotion ? 1 : Motion.Usage.popScale)
-            .opacity(appeared ? 1 : 0)
-    }
-
-    private var logoTurn: Double {
-        guard provider == .claude, !reduceMotion else { return 0 }
-        return (appeared ? 0 : Motion.Usage.turnFrom) + Double(workingTurns) * Motion.Usage.workingStepAngle
+        ZStack {
+            UsageLogo(provider: provider, size: 28)
+            if provider == .claude, activity.isClaudeWorking {
+                Circle()
+                    .trim(from: 0, to: 0.3)
+                    .stroke(provider.brandColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .frame(width: 32, height: 32)
+                    .rotationEffect(.degrees(-90 + Double(workingTurns) * Motion.Usage.workingStepAngle))
+            }
+        }
+        .scaleEffect(appeared || reduceMotion ? 1 : Motion.Usage.popScale)
+        .opacity(appeared ? 1 : 0)
     }
 
     @ViewBuilder private var detail: some View {

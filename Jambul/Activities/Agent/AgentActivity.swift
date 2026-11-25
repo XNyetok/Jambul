@@ -403,9 +403,9 @@ final class AgentActivity: IslandActivity {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
-    /// A session's client, as its logo in a peek.
+    /// A session's client, as its badge in a peek.
     static func logo(_ session: AgentSession) -> PeekLogo {
-        PeekLogo(asset: session.provider.logoAsset, name: session.provider.sessionName)
+        PeekLogo(provider: session.provider, name: session.provider.sessionName)
     }
 
     /// How long a turn took, like "28s", "1m 28s" or "1h 05m".
