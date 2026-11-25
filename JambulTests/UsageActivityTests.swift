@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import Jambul
@@ -63,7 +64,7 @@ struct UsageActivityTests {
         usage.record(claude(0.81))
         let first = try #require(log.peeks.last)
         #expect(!first.mustBeSeen)
-        #expect(first.logo == "ClaudeLogo")
+        #expect(first.logo == .claude)
         #expect(first.progress == 0.81)
         // Not shown yet, so new numbers ask again; the newer peek replaces the waiting one on the island.
         usage.record(claude(0.82))
@@ -305,20 +306,56 @@ struct UsageActivityTests {
         #expect(usage.readings[.codex] == lower)
     }
 
-    @Test func usageStartsWithClaudeAndAntigravityAndAsksBeforeClaude() throws {
+    @Test func usageStartsWithClaudeOnlyAndDropsPausedAntigravityFromLegacyDefaults() throws {
         let suiteName = "JambulTests.UsagePreferences"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let preferences = Preferences(defaults: defaults)
-        #expect(preferences.usageProviders == [.claude, .antigravity])
+        #expect(preferences.usageProviders == [.claude])
         #expect(!preferences.claudeStatusLineAgreed)
-        preferences.usageProviders = [.codex]
+        preferences.usageProviders = [.codex, .antigravity]
+        #expect(preferences.usageProviders == [.codex])
         preferences.claudeStatusLineAgreed = true
         let relaunched = Preferences(defaults: defaults)
         #expect(relaunched.usageProviders == [.codex])
         #expect(relaunched.claudeStatusLineAgreed)
+
+        // Upgrading from an older version that saved Antigravity enabled still keeps it disabled.
+        defaults.set(["claude", "antigravity"], forKey: "usageProviders")
+        let upgraded = Preferences(defaults: defaults)
+        #expect(upgraded.usageProviders == [.claude])
+    }
+
+    @Test func providerIconResolvesLocalAppAndFallsBackToNil() {
+        let sample = NSImage(size: NSSize(width: 16, height: 16))
+        var lookedUpPaths: [String] = []
+        let byBundle = ProviderIcon.resolve(
+            for: .claude,
+            urlForBundleID: { $0 == "com.anthropic.claudefordesktop" ? URL(filePath: "/Applications/Claude.app") : nil },
+            fileExists: { _ in false },
+            iconForFile: { path in lookedUpPaths.append(path); return sample }
+        )
+        #expect(byBundle === sample)
+        #expect(lookedUpPaths == ["/Applications/Claude.app"])
+
+        let byPath = ProviderIcon.resolve(
+            for: .codex,
+            urlForBundleID: { _ in nil },
+            fileExists: { $0 == "/Applications/Codex.app" },
+            iconForFile: { path in lookedUpPaths.append(path); return sample }
+        )
+        #expect(byPath === sample)
+        #expect(lookedUpPaths.last == "/Applications/Codex.app")
+
+        let missing = ProviderIcon.resolve(
+            for: .antigravity,
+            urlForBundleID: { _ in nil },
+            fileExists: { _ in false },
+            iconForFile: { _ in sample }
+        )
+        #expect(missing == nil)
     }
 }
 

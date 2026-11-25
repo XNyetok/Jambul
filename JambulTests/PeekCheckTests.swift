@@ -53,10 +53,10 @@ struct PeekCheckTests {
 /// A finished turn's badge moves as the peek comes out and then holds still, with nothing left of its ripple.
 @MainActor
 struct PeekCompletionTests {
-    private static let one = [PeekLogo(asset: "ClaudeLogo", name: "Claude Code")]
-    private static let three = [PeekLogo(asset: "OpenAILogo", name: "Codex"),
-                                PeekLogo(asset: "AntigravityLogo", name: "Antigravity"),
-                                PeekLogo(asset: "ClaudeLogo", name: "Claude Code")]
+    private static let one = [PeekLogo(provider: .claude, name: "Claude Code")]
+    private static let three = [PeekLogo(provider: .codex, name: "Codex"),
+                                PeekLogo(provider: .antigravity, name: "Antigravity"),
+                                PeekLogo(provider: .claude, name: "Claude Code")]
 
     /// Its frame is the same from the first moment to the last, so the title beside it never shifts.
     @Test func theBadgeKeepsItsPlaceAsItMoves() {

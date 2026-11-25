@@ -158,7 +158,7 @@ struct AgentActivityTests {
         // The client's logo in a ring that closes, then a check: "Done" in the client's color.
         #expect(peek.symbol == "checkmark.circle.fill")
         #expect(peek.motion == .complete)
-        #expect(peek.logos == [PeekLogo(asset: "ClaudeLogo", name: "Claude Code")])
+        #expect(peek.logos == [PeekLogo(provider: .claude, name: "Claude Code")])
         #expect(peek.emphasis == "Done")
         #expect(!peek.mustBeSeen)
     }

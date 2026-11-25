@@ -12,8 +12,10 @@ enum UsageProvider: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// Codex waits until the owner turns it on.
-    var isOnByDefault: Bool { self != .codex }
+    /// Antigravity usage refresh via `agy -p` is paused; Codex waits until the owner turns it on.
+    var supportsUsageLimits: Bool { self != .antigravity }
+
+    var isOnByDefault: Bool { self == .claude }
 }
 
 /// One limit of a subscription, such as Claude's five-hour window.

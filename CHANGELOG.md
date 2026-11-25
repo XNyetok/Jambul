@@ -4,6 +4,12 @@ All notable changes to Jambul are listed here. The format follows [Keep a Change
 
 ## [Unreleased]
 
+### Changed
+- Paused automatic Antigravity usage checks via headless `agy -p`; Antigravity coding sessions remain available.
+- Removed bundled third-party AI provider logos; Jambul now reads locally installed macOS app icons when available and falls back to monogram badges.
+- Replaced the menu bar icon with Jambul's own `[ / ]` mark.
+- Release archives now include `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+
 ### Fixed
 - Codex no longer logs a warning each time Jambul disconnects from it after a turn.
 

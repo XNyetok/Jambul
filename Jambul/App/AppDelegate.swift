@@ -21,7 +21,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let power = PowerMonitor()
     /// Lazy like Keep Awake, for the same reason: it remembers the last numbers in the real settings.
     private lazy var usage = UsageActivity(activities: activities, defaults: .standard)
-    private let antigravityUsage = AntigravityUsageSource()
     private let codexUsage = CodexUsageSource()
     private var usageSocket: InputSocket?
     private lazy var claudeStatusLine = ClaudeStatusLineInstaller(
@@ -104,7 +103,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeStatusItem() -> NSStatusItem {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "bird.fill", accessibilityDescription: "Jambul")
+        let icon = NSImage(named: "JambulMenuBarIcon")
+        icon?.isTemplate = true
+        icon?.accessibilityDescription = "Jambul"
+        item.button?.image = icon
         let menu = NSMenu()
         // Also here for while the island is hidden for a full-screen app.
         menu.addItem(withTitle: String(localized: "Keep Awake"), action: #selector(toggleKeepAwake), keyEquivalent: "")
@@ -133,13 +135,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startUsage() {
         activities.onPeekShown = { [usage] in usage.peekWasShown($0) }
-        usage.onTabAppear = { [usage, antigravityUsage, codexUsage] in
-            if usage.enabled.contains(.antigravity) { antigravityUsage.refresh() }
+        usage.onTabAppear = { [usage, codexUsage] in
             if usage.enabled.contains(.codex) { codexUsage.refresh() }
         }
         usage.onConnect = { [weak self] _ in self?.settings.show(.aiTools) }
-        antigravityUsage.onReading = { [usage] in usage.record($0) }
-        antigravityUsage.onProblem = { [usage] in usage.markProblem(.antigravity, $0) }
         codexUsage.onReading = { [usage] in usage.record($0) }
         codexUsage.onProblem = { [usage] in usage.markProblem(.codex, $0) }
         // The island applies its own settings; the usage settings ride along.
@@ -148,13 +147,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             islandSettingsChanged?()
             self?.applyUsagePreferences()
         }
-        // A limit may have started over during a sleep, and Antigravity's numbers moved on meanwhile.
+        // A limit may have started over during a sleep, and Codex's numbers may have moved on meanwhile.
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
                                                           queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.usage.checkResets()
-                if self.usage.enabled.contains(.antigravity) { self.antigravityUsage.refresh() }
                 if self.usage.enabled.contains(.codex) { self.codexUsage.refresh() }
             }
         }
@@ -164,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Starts and stops each source as the owner turns subscriptions on and off. Claude's status line changes only with
     /// the owner's agreement, and goes back as it was once Claude is off.
     private func applyUsagePreferences() {
-        let wanted = preferences.usageProviders
+        let wanted = preferences.usageProviders.filter(\.supportsUsageLimits)
         usage.enabled = UsageProvider.allCases.filter { wanted.contains($0) }
         let claudeAgreed = preferences.claudeStatusLineAgreed
         usage.needsConnecting = wanted.contains(.claude) && !claudeAgreed ? [.claude] : []
@@ -190,12 +188,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             usageSocket = nil
         }
 
-        if wanted.contains(.antigravity) {
-            antigravityUsage.start()
-            antigravityUsage.refresh()
-        } else {
-            antigravityUsage.stop()
-        }
         if wanted.contains(.codex) {
             codexUsage.start()
         } else {
@@ -398,7 +390,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showDemoPeek() {
-        activities.peek(Peek(symbol: "bird.fill", tint: .orange, title: "Hello from Jambul", detail: "Demo peek"))
+        activities.peek(Peek(symbol: "sparkles", tint: .orange, title: "Hello from Jambul", detail: "Demo peek"))
     }
     #endif
 }
